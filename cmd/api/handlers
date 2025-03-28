@@ -47,6 +47,32 @@ func (app *Config) Signup(w http.ResponseWriter, r *http.Request){
 
 
 func(app *Config) Login(w http.ResponseWriter, r *http.Request){
+	var request struct{
+		Email string `json:"email"`
+		Password string `json:"password"`
+	}
 
+	if err := app.ReadJSON(w,r,&request);err != nil{
+		app.errorJSON(e,err,http.StatusBadRequest)
+		app.ErrorLog.Println(err)
+		return
+	}
+	user1, err := app.GetByEmail(request.Email)
+	if err != nil{
+		app.errorJSON(w,errors.New("user doesn't exist"),http.StatusBadRequest)
+		app.ErrorLog.Println(err)
+		return
+	}	
 	
+	ismatch, err := app.PasswordMatches(user1.Password,request.Password)
+	if err != nil{
+		app.errorJSON(w,err,http.StatusBadRequest)
+		app.ErrorLog.Println(err)
+		return
+	}
+	if !ismatch{
+		app.errorJSON(w,errors.New("invalid password"),http.StatusBadRequest)
+		app.ErrorLog.Println(errors.New("Invalid password"))
+		return
+	}
 }
