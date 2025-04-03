@@ -17,6 +17,7 @@ type User struct {
 	Devices   []Device       `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"devices,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
+	Role      string         `gorm:"type:varchar(50);" json:"role,omitempty"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
