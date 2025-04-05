@@ -10,7 +10,7 @@ import (
 type jsonResponse struct {
 	Error   bool        `json:"error"`
 	Message string      `json:"message"`
-	Data    interface{} `json:'data'`
+	Data    interface{} `json:"data"`
 }
 
 func (app *Config) ReadJSON(w http.ResponseWriter, r *http.Request, data any) error {

@@ -5,10 +5,7 @@ import (
 	"field_eyes/data"
 	"fmt"
 	"net/http"
-	"os"
-	"time"
 
-	"github.com/golang-jwt/jwt"
 	"gorm.io/gorm"
 )
 
@@ -96,21 +93,4 @@ func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusOK, map[string]string{
 		"token": token,
 	})
-}
-
-func (app *Config) GenerateJWT(user data.User) (string, error) {
-	mySigningKey := os.Getenv("JWT_SECRETE")
-	claims := jwt.MapClaims{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"role":    user.Role,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(mySigningKey)
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
 }

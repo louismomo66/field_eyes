@@ -19,6 +19,23 @@ type Device struct {
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+// DeviceData represents the data logs for a device.
+type DeviceData struct {
+	gorm.Model
+	DeviceID        uint      `gorm:"not null" json:"device_id"` // Foreign key to the Device table
+	SerialNumber    string    `gorm:"not null" json:"serial_number"`
+	Temperature     float64   `json:"temperature"`
+	Humidity        float64   `json:"humidity"`
+	Nitrogen        float64   `json:"nitrogen"`
+	Phosphorous     float64   `json:"phosphorous"`
+	Potassium       float64   `json:"potassium"`
+	PH              float64   `json:"ph"`
+	SoilMoisture    float64   `json:"soil_moisture"`
+	SoilTemperature float64   `json:"soil_temperature"`
+	SoilHumidity    float64   `json:"soil_humidity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 // DeviceRepository implements DeviceInterface using GORM.
 type DeviceRepository struct {
 	db *gorm.DB
@@ -27,6 +44,16 @@ type DeviceRepository struct {
 // NewDeviceRepository creates a new instance of DeviceRepository.
 func NewDeviceRepository(db *gorm.DB) DeviceInterface {
 	return &DeviceRepository{db: db}
+}
+
+// DeviceDataRepository implements DeviceDataInterface using GORM.
+type DeviceDataRepository struct {
+	db *gorm.DB
+}
+
+// NewDeviceDataRepository creates a new instance of DeviceDataRepository.
+func NewDeviceDataRepository(db *gorm.DB) DeviceDataInterface {
+	return &DeviceDataRepository{db: db}
 }
 
 // GetAll retrieves all devices from the database.
@@ -73,4 +100,39 @@ func (r *DeviceRepository) AssignDevice(userID uint, device *Device) error {
 
 		return nil
 	})
+}
+func (r *DeviceRepository) GetByUserID(userID uint) ([]*Device, error) {
+	var devices []*Device
+	result := r.db.Where("user_id = ?", userID).Find(&devices)
+	return devices, result.Error
+}
+func (r *DeviceRepository) CreateDevice(device *Device) error {
+	return r.db.Create(device).Error
+}
+func (r *DeviceRepository) GetBySerialNumber(serialNumber string) (*Device, error) {
+	var device Device
+	result := r.db.Where("serial_number = ?", serialNumber).First(&device)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &device, result.Error
+}
+
+// CreateLog creates a new log entry for a device.
+func (r *DeviceDataRepository) CreateLog(data *DeviceData) error {
+	return r.db.Create(data).Error
+}
+
+// GetLogsByDeviceID retrieves all logs for a specific device using its DeviceID.
+func (r *DeviceDataRepository) GetLogsByDeviceID(deviceID uint) ([]*DeviceData, error) {
+	var logs []*DeviceData
+	result := r.db.Where("device_id = ?", deviceID).Order("created_at DESC").Find(&logs)
+	return logs, result.Error
+}
+
+// GetLogsBySerialNumber retrieves all logs for a specific device using its SerialNumber.
+func (r *DeviceDataRepository) GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error) {
+	var logs []*DeviceData
+	result := r.db.Where("serial_number = ?", serialNumber).Order("created_at DESC").Find(&logs)
+	return logs, result.Error
 }

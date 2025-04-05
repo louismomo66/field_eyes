@@ -18,5 +18,15 @@ type DeviceInterface interface {
 	GetAll() ([]*Device, error)
 	GetOne(id uint) (*Device, error)
 	AssignDevice(userID uint, device *Device) error
+	GetByUserID(userID uint) ([]*Device, error)
+	CreateDevice(device *Device) error
+	GetBySerialNumber(serialNumber string) (*Device, error)
 	// Add other methods as needed
+}
+
+// DeviceDataInterface defines the methods for DeviceData operations.
+type DeviceDataInterface interface {
+	CreateLog(data *DeviceData) error
+	GetLogsByDeviceID(deviceID uint) ([]*DeviceData, error)
+	GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error)
 }
