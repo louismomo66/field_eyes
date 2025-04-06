@@ -11,6 +11,10 @@ type UserInterface interface {
 	DeleteByID(id uint) error
 	ResetPassword(userID uint, newPassword string) error
 	PasswordMatches(user *User, plainText string) (bool, error)
+	// OTP Related methods
+	GenerateAndSaveOTP(email string) (string, error)
+	VerifyOTP(email, otp string) (bool, error)
+	ResetPasswordWithOTP(email, otp, newPassword string) error
 }
 
 // DeviceInterface defines the methods for Device operations.
@@ -21,6 +25,8 @@ type DeviceInterface interface {
 	GetByUserID(userID uint) ([]*Device, error)
 	CreateDevice(device *Device) error
 	GetBySerialNumber(serialNumber string) (*Device, error)
+	Update(device *Device) error
+	GetUnclaimedDevices() ([]*Device, error)
 	// Add other methods as needed
 }
 

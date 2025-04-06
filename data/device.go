@@ -136,3 +136,16 @@ func (r *DeviceDataRepository) GetLogsBySerialNumber(serialNumber string) ([]*De
 	result := r.db.Where("serial_number = ?", serialNumber).Order("created_at DESC").Find(&logs)
 	return logs, result.Error
 }
+
+// Update updates an existing device in the database
+func (r *DeviceRepository) Update(device *Device) error {
+	result := r.db.Save(device)
+	return result.Error
+}
+
+// GetUnclaimedDevices retrieves all devices that haven't been claimed by any user
+func (r *DeviceRepository) GetUnclaimedDevices() ([]*Device, error) {
+	var devices []*Device
+	result := r.db.Where("user_id = 0").Find(&devices)
+	return devices, result.Error
+}

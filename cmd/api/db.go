@@ -16,21 +16,54 @@ func (app *Config) initDB() *gorm.DB {
 	}
 
 	// Auto-migrate the schema
-	if err := conn.AutoMigrate(&app.Models.User, &app.Models.Device); err != nil {
+	if err := conn.AutoMigrate(&app.Models.User, &app.Models.Device, &app.Models.DeviceData); err != nil {
 		log.Panic("failed to migrate database:", err)
 	}
 	log.Println("Database migration completed successfully")
 
 	return conn
 }
+
 func connectToDB() *gorm.DB {
 	counts := 0
+
+	// Get database connection details from environment variables or use defaults
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "localhost"
+	}
+
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "postgres"
+	}
+
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbPassword == "" {
+		dbPassword = "postgres"
+	}
+
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "field_eyes"
+	}
+
+	// Construct the DSN string
 	dsn := os.Getenv("DSN")
+	if dsn == "" {
+		dsn = "host=" + dbHost + " port=" + dbPort + " user=" + dbUser + " password=" + dbPassword + " dbname=" + dbName + " sslmode=disable"
+	}
 
 	for {
 		connection, err := openDB(dsn)
 		if err != nil {
 			log.Println("postgres not yet ready...")
+			log.Printf("Connection error: %v", err)
 		} else {
 			log.Print("connected to database!")
 			return connection
