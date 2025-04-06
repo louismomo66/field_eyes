@@ -1,6 +1,7 @@
 package main
 
 import (
+	"field_eyes/data"
 	"log"
 	"os"
 	"time"
@@ -15,8 +16,8 @@ func (app *Config) initDB() *gorm.DB {
 		log.Panic("can't connect to database")
 	}
 
-	// Auto-migrate the schema
-	if err := conn.AutoMigrate(&app.Models.User, &app.Models.Device, &app.Models.DeviceData); err != nil {
+	// Auto-migrate the schema using actual model structs, not interfaces
+	if err := conn.AutoMigrate(&data.User{}, &data.Device{}, &data.DeviceData{}); err != nil {
 		log.Panic("failed to migrate database:", err)
 	}
 	log.Println("Database migration completed successfully")

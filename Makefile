@@ -34,13 +34,13 @@ docker-build:
 
 # Start all Docker containers
 .PHONY: docker-up
-docker-up:
+up:
 	@echo "Starting Docker containers..."
 	docker-compose up -d
 
 # Stop all Docker containers
 .PHONY: docker-down
-docker-down:
+down:
 	@echo "Stopping Docker containers..."
 	docker-compose down
 

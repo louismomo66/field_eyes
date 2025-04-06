@@ -280,6 +280,8 @@ func (app *Config) GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 					SoilMoisture:    cl.SoilMoisture,
 					SoilTemperature: cl.SoilTemperature,
 					SoilHumidity:    cl.SoilHumidity,
+					Longitude:       cl.Longitude,
+					Latitude:        cl.Latitude,
 					CreatedAt:       cl.CreatedAt,
 				}
 			}
@@ -318,6 +320,8 @@ func (app *Config) GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 						SoilMoisture:    log.SoilMoisture,
 						SoilTemperature: log.SoilTemperature,
 						SoilHumidity:    log.SoilHumidity,
+						Longitude:       log.Longitude,
+						Latitude:        log.Latitude,
 						CreatedAt:       log.CreatedAt,
 					}
 				}

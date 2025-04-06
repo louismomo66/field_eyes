@@ -11,6 +11,7 @@ func (app *Config) routes() http.Handler {
 	mux := chi.NewRouter()
 	//set up middleware
 	mux.Use(middleware.Recoverer)
+	mux.Use(app.EnableCORS)
 	mux.Route("/api", func(r chi.Router) {
 		// User account related endpoints
 		r.Post("/signup", app.Signup)                  // Endpoint for user signup

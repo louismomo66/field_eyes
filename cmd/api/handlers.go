@@ -1,56 +1,74 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"field_eyes/data"
 	"fmt"
+	"io"
 	"net/http"
 
 	"gorm.io/gorm"
 )
 
 func (app *Config) Signup(w http.ResponseWriter, r *http.Request) {
-	var user data.User
-	if err := app.ReadJSON(w, r, user); err != nil {
-		app.errorJSON(w, err, http.StatusBadRequest)
-		app.ErrorLog.Println(err)
-		return
-	}
-	if user.Username == "" || user.Email == "" || user.Password == "" {
-		app.errorJSON(w, errors.New("username, Email and Password are required"), http.StatusBadRequest)
-		app.ErrorLog.Println(errors.New("usernam, Email and password are empty"))
-		return
-	}
-
-	user1, err := app.Models.User.GetByEmail(user.Email)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		app.errorJSON(w, err, http.StatusBadRequest)
-		app.ErrorLog.Println(errors.New("user does not exist"))
-		return
-	}
-	if user1.Email != "" {
-		app.errorJSON(w, errors.New("user already exists"), http.StatusBadRequest)
-		app.ErrorLog.Println(errors.New("user already exists"))
-		return
-	}
-
-	hashedPassword, err := data.HashPassword(user.Password)
+	// Log the request body
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusBadRequest)
 		app.ErrorLog.Println(err)
 		return
 	}
+	app.InfoLog.Printf("Received signup request body: %s", string(body))
+	// Restore the body for further reading
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	user.Password = hashedPassword
+	var user data.User
+	if err := app.ReadJSON(w, r, &user); err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Log the parsed user data
+	app.InfoLog.Printf("Parsed user data: username=%s, email=%s, password=%s", user.Username, user.Email, user.TempPassword)
+
+	// Validate required fields
+	if user.Username == "" || user.Email == "" || user.TempPassword == "" {
+		app.errorJSON(w, errors.New("username, email and password are required"), http.StatusBadRequest)
+		app.ErrorLog.Println("username, email and password are empty")
+		return
+	}
+
+	// Check if user exists
+	existingUser, err := app.Models.User.GetByEmail(user.Email)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		app.errorJSON(w, errors.New("database error"), http.StatusInternalServerError)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// If user exists (not nil and has email)
+	if existingUser != nil && existingUser.Email != "" {
+		app.errorJSON(w, errors.New("user already exists"), http.StatusBadRequest)
+		app.ErrorLog.Println("user already exists")
+		return
+	}
+
+	// No need to hash password here, it's done in the Insert function
 	id, err := app.Models.User.Insert(&user)
 	if err != nil {
-		app.errorJSON(w, err, http.StatusBadRequest)
+		app.errorJSON(w, err, http.StatusInternalServerError)
 		app.ErrorLog.Println(err)
 		return
 	}
-	app.writeJSON(w, http.StatusCreated, fmt.Sprintf("User created successfully with id %d", id))
-	app.InfoLog.Printf("User created successfully with id %d", id)
 
+	// Return standardized response
+	app.writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"message": fmt.Sprintf("User created successfully with id %d", id),
+		"user_id": id,
+	})
+	app.InfoLog.Printf("User created successfully with id %d", id)
 }
 
 func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
@@ -64,34 +82,52 @@ func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
 		app.ErrorLog.Println(err)
 		return
 	}
-	user1, err := app.Models.User.GetByEmail(request.Email)
+
+	// Validate required fields
+	if request.Email == "" || request.Password == "" {
+		app.errorJSON(w, errors.New("email and password are required"), http.StatusBadRequest)
+		app.ErrorLog.Println("email and password are empty")
+		return
+	}
+
+	user, err := app.Models.User.GetByEmail(request.Email)
 	if err != nil {
-		app.errorJSON(w, errors.New("user doesn't exist"), http.StatusBadRequest)
+		app.errorJSON(w, errors.New("invalid credentials"), http.StatusBadRequest)
 		app.ErrorLog.Println(err)
 		return
 	}
 
-	ismatch, err := app.Models.User.PasswordMatches(user1, request.Password)
+	isMatch, err := app.Models.User.PasswordMatches(user, request.Password)
 	if err != nil {
-		app.errorJSON(w, err, http.StatusBadRequest)
+		app.errorJSON(w, errors.New("authentication error"), http.StatusInternalServerError)
 		app.ErrorLog.Println(err)
 		return
 	}
-	if !ismatch {
-		app.errorJSON(w, errors.New("invalid password"), http.StatusBadRequest)
-		app.ErrorLog.Println(errors.New("Invalid password"))
+	if !isMatch {
+		app.errorJSON(w, errors.New("invalid credentials"), http.StatusBadRequest)
+		app.ErrorLog.Println("Invalid password")
 		return
 	}
-	token, err := app.GenerateJWT(*user1)
+
+	token, err := app.GenerateJWT(*user)
 	if err != nil {
 		app.errorJSON(w, errors.New("failed to generate token"), http.StatusInternalServerError)
 		app.ErrorLog.Println(err)
 		return
 	}
 
-	// Respond with the token
-	app.writeJSON(w, http.StatusOK, map[string]string{
+	// Create a user response without password
+	userResponse := map[string]interface{}{
+		"id":       user.ID,
+		"username": user.Username,
+		"email":    user.Email,
+		"role":     user.Role,
+	}
+
+	// Respond with the token and user
+	app.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"token": token,
+		"user":  userResponse,
 	})
 }
 

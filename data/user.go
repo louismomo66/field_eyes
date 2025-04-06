@@ -13,14 +13,15 @@ import (
 // User represents the users table in the database.
 type User struct {
 	gorm.Model
-	Username  string         `gorm:"type:varchar(100);not null" json:"username"`
-	Email     string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
-	Password  string         `gorm:"type:varchar(255);not null" json:"-"`
-	Devices   []Device       `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"devices,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	Role      string         `gorm:"type:varchar(50);" json:"role,omitempty"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	Username     string         `gorm:"type:varchar(100);not null" json:"username"`
+	Email        string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
+	Password     string         `gorm:"type:varchar(255);not null" json:"-"`
+	TempPassword string         `json:"password" gorm:"-"` // Temporary field for password unmarshaling
+	Devices      []Device       `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"devices,omitempty"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	Role         string         `gorm:"type:varchar(50);" json:"role,omitempty"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 	// OTP fields
 	OTPCode      string    `gorm:"type:varchar(6)" json:"-"`
 	OTPExpiresAt time.Time `json:"-"`
@@ -75,7 +76,7 @@ func (r *UserRepository) GetOne(id uint) (*User, error) {
 // Insert creates a new user in the database after hashing the password.
 func (r *UserRepository) Insert(user *User) (uint, error) { // Changed return type to match interface
 	// Hash the password before saving
-	hashedPassword, err := HashPassword(user.Password)
+	hashedPassword, err := HashPassword(user.TempPassword)
 	if err != nil {
 		return 0, err
 	}

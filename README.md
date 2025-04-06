@@ -130,7 +130,9 @@ This workflow allows devices to start logging data immediately upon deployment, 
     "ph": 6.8,
     "soil_moisture": 35.2,
     "soil_temperature": 22.1,
-    "soil_humidity": 55.4
+    "soil_humidity": 55.4,
+    "longitude": 37.7749,
+    "latitude": -122.4194
   }
   ```
 - If the device doesn't exist, it will be auto-registered with device type "auto_registered"
@@ -154,7 +156,9 @@ Devices can also send data via MQTT, which follows the same auto-registration an
     "ph": 6.8,
     "soil_moisture": 35.2,
     "soil_temperature": 22.1,
-    "soil_humidity": 55.4
+    "soil_humidity": 55.4,
+    "longitude": 37.7749,
+    "latitude": -122.4194
   }
   ```
 
