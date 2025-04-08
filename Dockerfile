@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -27,12 +27,14 @@ RUN apk --no-cache add ca-certificates tzdata
 # Set working directory
 WORKDIR /app
 
-# Copy the binary from the builder stage
-COPY --from=builder /app/field_eyes_api .
-COPY --from=builder /app/.env .
+# Copy the binary from the app directory
+COPY ./app/field_eyes_api /app/field_eyes_api
+
+# Create a default .env file if it doesn't exist
+RUN touch .env
 
 # Expose the application port
 EXPOSE 9004
 
 # Run the application
-CMD ["./field_eyes_api"] 
+CMD ["/app/field_eyes_api"] 

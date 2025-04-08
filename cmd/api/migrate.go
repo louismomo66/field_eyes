@@ -65,7 +65,7 @@ func main() {
 
 	// Migrate the database
 	infoLog.Println("Running migrations...")
-	if err := db.AutoMigrate(&models.User, &models.Device, &models.DeviceData); err != nil {
+	if err := db.AutoMigrate(&models.User, &models.Device, &models.DeviceData, &models.Notification); err != nil {
 		errorLog.Fatalf("Migration failed: %v", err)
 	}
 	infoLog.Println("Migrations completed successfully!")

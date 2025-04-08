@@ -38,6 +38,21 @@ type DeviceData struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// Notification represents a notification in the database
+type Notification struct {
+	gorm.Model
+	Type       string         `gorm:"type:varchar(50);not null" json:"type"` // info, warning, alert, success
+	Message    string         `gorm:"type:text;not null" json:"message"`
+	DeviceID   uint           `json:"device_id"`
+	DeviceName string         `json:"device_name"`
+	Read       bool           `gorm:"default:false" json:"read"`
+	UserID     uint           `gorm:"not null" json:"user_id"`
+	User       User           `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 // DeviceRepository implements DeviceInterface using GORM.
 type DeviceRepository struct {
 	db *gorm.DB
@@ -56,6 +71,16 @@ type DeviceDataRepository struct {
 // NewDeviceDataRepository creates a new instance of DeviceDataRepository.
 func NewDeviceDataRepository(db *gorm.DB) DeviceDataInterface {
 	return &DeviceDataRepository{db: db}
+}
+
+// NotificationRepository implements NotificationInterface using GORM
+type NotificationRepository struct {
+	db *gorm.DB
+}
+
+// NewNotificationRepository creates a new instance of NotificationRepository
+func NewNotificationRepository(db *gorm.DB) NotificationInterface {
+	return &NotificationRepository{db: db}
 }
 
 // GetAll retrieves all devices from the database.
@@ -103,14 +128,17 @@ func (r *DeviceRepository) AssignDevice(userID uint, device *Device) error {
 		return nil
 	})
 }
+
 func (r *DeviceRepository) GetByUserID(userID uint) ([]*Device, error) {
 	var devices []*Device
 	result := r.db.Where("user_id = ?", userID).Find(&devices)
 	return devices, result.Error
 }
+
 func (r *DeviceRepository) CreateDevice(device *Device) error {
 	return r.db.Create(device).Error
 }
+
 func (r *DeviceRepository) GetBySerialNumber(serialNumber string) (*Device, error) {
 	var device Device
 	result := r.db.Where("serial_number = ?", serialNumber).First(&device)
@@ -150,4 +178,38 @@ func (r *DeviceRepository) GetUnclaimedDevices() ([]*Device, error) {
 	var devices []*Device
 	result := r.db.Where("user_id = 0").Find(&devices)
 	return devices, result.Error
+}
+
+// CreateNotification creates a new notification
+func (r *NotificationRepository) CreateNotification(notification *Notification) error {
+	return r.db.Create(notification).Error
+}
+
+// GetUserNotifications retrieves all notifications for a user
+func (r *NotificationRepository) GetUserNotifications(userID uint) ([]*Notification, error) {
+	var notifications []*Notification
+	result := r.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&notifications)
+	return notifications, result.Error
+}
+
+// GetUnreadNotifications retrieves unread notifications for a user
+func (r *NotificationRepository) GetUnreadNotifications(userID uint) ([]*Notification, error) {
+	var notifications []*Notification
+	result := r.db.Where("user_id = ? AND read = ?", userID, false).Order("created_at DESC").Find(&notifications)
+	return notifications, result.Error
+}
+
+// MarkAsRead marks a notification as read
+func (r *NotificationRepository) MarkAsRead(id uint) error {
+	return r.db.Model(&Notification{}).Where("id = ?", id).Update("read", true).Error
+}
+
+// MarkAllAsRead marks all notifications for a user as read
+func (r *NotificationRepository) MarkAllAsRead(userID uint) error {
+	return r.db.Model(&Notification{}).Where("user_id = ?", userID).Update("read", true).Error
+}
+
+// DeleteNotification deletes a notification by its ID
+func (r *NotificationRepository) DeleteNotification(id uint) error {
+	return r.db.Delete(&Notification{}, id).Error
 }

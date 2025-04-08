@@ -33,8 +33,6 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD}
       - MQTT_CLIENT_ID=${MQTT_CLIENT_ID:-field_eyes_server}
       - MQTT_TOPIC_ROOT=${MQTT_TOPIC_ROOT:-field_eyes/devices}
-    volumes:
-      - ./:/app
     restart: unless-stopped
     networks:
       - field-eyes-network

@@ -26,6 +26,14 @@ func (app *Config) routes() http.Handler {
 
 		// Analysis endpoints
 		r.Get("/analyze-device", app.AnalyzeDeviceData) // Endpoint for ML analysis of device data
+
+		// Notification endpoints
+		r.Get("/notifications", app.GetNotifications)                      // Get all notifications for a user
+		r.Post("/notifications", app.CreateNotification)                   // Create a new notification
+		r.Put("/notifications/read", app.MarkNotificationAsRead)           // Mark a notification as read
+		r.Put("/notifications/read-all", app.MarkAllNotificationsAsRead)   // Mark all notifications as read
+		r.Delete("/notifications", app.DeleteNotification)                 // Delete a notification
+		r.Post("/notifications/generate", app.GenerateDeviceNotifications) // Generate notifications from device data
 	})
 	return mux
 }

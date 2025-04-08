@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"gorm.io/gorm"
 )
@@ -219,4 +220,278 @@ func (app *Config) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		"message": "Password has been reset successfully",
 	})
 	app.InfoLog.Printf("Password reset successful for email: %s", request.Email)
+}
+
+// GetNotifications returns all notifications for the authenticated user
+func (app *Config) GetNotifications(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Get query parameter for filtering unread notifications
+	unreadOnly := r.URL.Query().Get("unread")
+
+	var notifications []*data.Notification
+	var fetchErr error
+
+	// Fetch notifications based on filter
+	if unreadOnly == "true" {
+		notifications, fetchErr = app.Models.Notification.GetUnreadNotifications(userID)
+	} else {
+		notifications, fetchErr = app.Models.Notification.GetUserNotifications(userID)
+	}
+
+	if fetchErr != nil {
+		app.errorJSON(w, errors.New("failed to fetch notifications"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to fetch notifications: %v", fetchErr)
+		return
+	}
+
+	// Return notifications
+	app.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"notifications": notifications,
+		"count":         len(notifications),
+	})
+}
+
+// CreateNotification creates a new notification
+func (app *Config) CreateNotification(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Parse request body
+	var notificationRequest struct {
+		Type       string `json:"type"`
+		Message    string `json:"message"`
+		DeviceID   uint   `json:"device_id"`
+		DeviceName string `json:"device_name"`
+	}
+
+	if err := app.ReadJSON(w, r, &notificationRequest); err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Validate required fields
+	if notificationRequest.Message == "" || notificationRequest.Type == "" {
+		app.errorJSON(w, errors.New("message and type are required"), http.StatusBadRequest)
+		return
+	}
+
+	// Create notification
+	notification := data.Notification{
+		Type:       notificationRequest.Type,
+		Message:    notificationRequest.Message,
+		DeviceID:   notificationRequest.DeviceID,
+		DeviceName: notificationRequest.DeviceName,
+		UserID:     userID,
+		Read:       false,
+	}
+
+	if err := app.Models.Notification.CreateNotification(&notification); err != nil {
+		app.errorJSON(w, errors.New("failed to create notification"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to create notification: %v", err)
+		return
+	}
+
+	// Return success
+	app.writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"message":      "Notification created successfully",
+		"notification": notification,
+	})
+}
+
+// MarkNotificationAsRead marks a notification as read
+func (app *Config) MarkNotificationAsRead(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	_, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Get notification ID from request
+	idParam := r.URL.Query().Get("id")
+	if idParam == "" {
+		app.errorJSON(w, errors.New("notification ID is required"), http.StatusBadRequest)
+		return
+	}
+
+	// Convert ID to uint
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		app.errorJSON(w, errors.New("invalid notification ID"), http.StatusBadRequest)
+		return
+	}
+
+	// Mark as read
+	if err := app.Models.Notification.MarkAsRead(uint(id)); err != nil {
+		app.errorJSON(w, errors.New("failed to mark notification as read"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to mark notification as read: %v", err)
+		return
+	}
+
+	// Return success
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Notification marked as read",
+	})
+}
+
+// MarkAllNotificationsAsRead marks all notifications for a user as read
+func (app *Config) MarkAllNotificationsAsRead(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Mark all as read
+	if err := app.Models.Notification.MarkAllAsRead(userID); err != nil {
+		app.errorJSON(w, errors.New("failed to mark all notifications as read"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to mark all notifications as read: %v", err)
+		return
+	}
+
+	// Return success
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "All notifications marked as read",
+	})
+}
+
+// DeleteNotification deletes a notification
+func (app *Config) DeleteNotification(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	_, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Get notification ID from request
+	idParam := r.URL.Query().Get("id")
+	if idParam == "" {
+		app.errorJSON(w, errors.New("notification ID is required"), http.StatusBadRequest)
+		return
+	}
+
+	// Convert ID to uint
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		app.errorJSON(w, errors.New("invalid notification ID"), http.StatusBadRequest)
+		return
+	}
+
+	// Delete notification
+	if err := app.Models.Notification.DeleteNotification(uint(id)); err != nil {
+		app.errorJSON(w, errors.New("failed to delete notification"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to delete notification: %v", err)
+		return
+	}
+
+	// Return success
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Notification deleted",
+	})
+}
+
+// GenerateDeviceNotifications checks device data for conditions that should create notifications
+func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Get user's devices
+	devices, err := app.Models.Device.GetByUserID(userID)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to fetch devices"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to fetch devices: %v", err)
+		return
+	}
+
+	notificationsGenerated := 0
+
+	// Check each device for conditions that would trigger notifications
+	for _, device := range devices {
+		// Get latest log for device
+		logs, err := app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+		if err != nil || len(logs) == 0 {
+			continue
+		}
+
+		// Get most recent log
+		latestLog := logs[0]
+
+		// Create notification for low battery (if battery < 20%)
+		if latestLog.SoilMoisture < 20 {
+			notification := data.Notification{
+				Type:       "warning",
+				Message:    fmt.Sprintf("Soil moisture is critically low (%f%%)", latestLog.SoilMoisture),
+				DeviceID:   device.ID,
+				DeviceName: device.SerialNumber,
+				UserID:     userID,
+				Read:       false,
+			}
+
+			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
+				notificationsGenerated++
+			}
+		}
+
+		// Check extreme temperature
+		if latestLog.SoilTemperature > 35 || latestLog.SoilTemperature < 5 {
+			notification := data.Notification{
+				Type:       "alert",
+				Message:    fmt.Sprintf("Extreme soil temperature detected: %f°C", latestLog.SoilTemperature),
+				DeviceID:   device.ID,
+				DeviceName: device.SerialNumber,
+				UserID:     userID,
+				Read:       false,
+			}
+
+			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
+				notificationsGenerated++
+			}
+		}
+
+		// Check pH levels
+		if latestLog.PH < 5.5 || latestLog.PH > 7.5 {
+			notification := data.Notification{
+				Type:       "info",
+				Message:    fmt.Sprintf("pH level outside optimal range: %f", latestLog.PH),
+				DeviceID:   device.ID,
+				DeviceName: device.SerialNumber,
+				UserID:     userID,
+				Read:       false,
+			}
+
+			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
+				notificationsGenerated++
+			}
+		}
+	}
+
+	// Return success with count of notifications generated
+	app.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":             "Device notifications generated",
+		"notifications_count": notificationsGenerated,
+		"devices_checked":     len(devices),
+	})
 }

@@ -36,3 +36,13 @@ type DeviceDataInterface interface {
 	GetLogsByDeviceID(deviceID uint) ([]*DeviceData, error)
 	GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error)
 }
+
+// NotificationInterface defines the methods for Notification operations
+type NotificationInterface interface {
+	CreateNotification(notification *Notification) error
+	GetUserNotifications(userID uint) ([]*Notification, error)
+	GetUnreadNotifications(userID uint) ([]*Notification, error)
+	MarkAsRead(id uint) error
+	MarkAllAsRead(userID uint) error
+	DeleteNotification(id uint) error
+}
