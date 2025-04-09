@@ -1,12 +1,13 @@
-FROM golang:1.22-alpine AS builder
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev
 
 # Set working directory
 WORKDIR /app
 
-# Install necessary dependencies
-RUN apk add --no-cache gcc musl-dev
-
-# Copy go.mod and go.sum
+# Copy go mod and sum files
 COPY go.mod go.sum ./
 
 # Download dependencies
@@ -15,26 +16,27 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -o field_eyes_api ./cmd/api
+# Build the application with explicit architecture settings
+ENV GOOS=linux
+ENV GOARCH=amd64
+RUN CGO_ENABLED=0 go build -o app/field_eyes_api ./cmd/api
 
-# Create a smaller image for the final container
+# Final stage
 FROM alpine:latest
 
-# Add necessary certificates for HTTPS
+# Install necessary packages
 RUN apk --no-cache add ca-certificates tzdata
 
-# Set working directory
 WORKDIR /app
 
-# Copy the binary from the app directory
-COPY ./app/field_eyes_api /app/field_eyes_api
+# Copy the binary from builder
+COPY --from=builder /app/app/field_eyes_api /app/field_eyes_api
 
-# Create a default .env file if it doesn't exist
+# Create empty .env file
 RUN touch .env
 
-# Expose the application port
-EXPOSE 9004
+# Expose port
+EXPOSE 8080
 
 # Run the application
-CMD ["/app/field_eyes_api"] 
+CMD ["./field_eyes_api"] 
