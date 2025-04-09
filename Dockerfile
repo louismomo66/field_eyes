@@ -32,7 +32,7 @@ COPY --from=builder /app/field_eyes_api .
 RUN touch .env
 
 # Expose port
-EXPOSE 8080
+EXPOSE 9004
 
 # Command to run the executable
 CMD ["./field_eyes_api"] 
