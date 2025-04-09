@@ -25,68 +25,41 @@ RUN CGO_ENABLED=0 go build -o app/field_eyes_api ./cmd/api
 FROM alpine:latest
 
 # Install necessary packages
-RUN apk --no-cache add ca-certificates tzdata bash curl
+RUN apk --no-cache add ca-certificates tzdata bash postgresql-client
 
 WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/app/field_eyes_api /app/field_eyes_api
 
-# Create startup script
-RUN echo '#!/bin/bash' > /app/start.sh && \
-    echo 'set -e' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo 'echo "Starting Field Eyes API..."' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo '# Check if DB_HOST is set' >> /app/start.sh && \
-    echo 'if [ -z "$DB_HOST" ]; then' >> /app/start.sh && \
-    echo '  echo "ERROR: DB_HOST environment variable is not set"' >> /app/start.sh && \
-    echo '  exit 1' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo '# Check if DB_USER is set' >> /app/start.sh && \
-    echo 'if [ -z "$DB_USER" ]; then' >> /app/start.sh && \
-    echo '  echo "ERROR: DB_USER environment variable is not set"' >> /app/start.sh && \
-    echo '  exit 1' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo '# Check if DB_PASSWORD is set' >> /app/start.sh && \
-    echo 'if [ -z "$DB_PASSWORD" ]; then' >> /app/start.sh && \
-    echo '  echo "ERROR: DB_PASSWORD environment variable is not set"' >> /app/start.sh && \
-    echo '  exit 1' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo '# Check if DB_NAME is set' >> /app/start.sh && \
-    echo 'if [ -z "$DB_NAME" ]; then' >> /app/start.sh && \
-    echo '  echo "ERROR: DB_NAME environment variable is not set"' >> /app/start.sh && \
-    echo '  exit 1' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo '# Print connection info (without sensitive data)' >> /app/start.sh && \
-    echo 'echo "Connecting to database at $DB_HOST:$DB_PORT"' >> /app/start.sh && \
-    echo 'echo "Using database: $DB_NAME"' >> /app/start.sh && \
-    echo '' >> /app/start.sh && \
-    echo '# Start the application' >> /app/start.sh && \
-    echo 'exec /app/field_eyes_api' >> /app/start.sh && \
-    chmod +x /app/start.sh
+# Create a wait-for-it script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+host="$1"\n\
+shift\n\
+cmd="$@"\n\
+\n\
+until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$host" -U "$POSTGRES_USER" -c '\''\q'\''; do\n\
+  >&2 echo "Postgres is unavailable - sleeping"\n\
+  sleep 1\n\
+done\n\
+\n\
+>&2 echo "Postgres is up - executing command"\n\
+exec $cmd' > /app/wait-for-it.sh && chmod +x /app/wait-for-it.sh
 
 # Create empty .env file
 RUN touch .env
 
 # Set default environment variables
-# These will be overridden by Render's environment variables
-ENV DB_HOST=localhost
+ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_USER=postgres
 ENV DB_PASSWORD=postgres
 ENV DB_NAME=field_eyes
-ENV REDIS_HOST=localhost
-ENV REDIS_PORT=6379
-ENV MQTT_HOST=localhost
-ENV MQTT_PORT=1883
 
 # Expose port
 EXPOSE 8080
 
-# Run the application with the startup script
-CMD ["/bin/bash", "/app/start.sh"] 
+# Run the application with wait-for-it script
+CMD ["/app/wait-for-it.sh", "postgres", "/app/field_eyes_api"] 
