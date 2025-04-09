@@ -56,9 +56,9 @@ func connectToDB() *gorm.DB {
 
 	// Construct the DSN string
 	dsn := os.Getenv("DSN")
-	if dsn == "" {
-		dsn = "host=" + dbHost + " port=" + dbPort + " user=" + dbUser + " password=" + dbPassword + " dbname=" + dbName + " sslmode=require"
-	}
+	// if dsn == "" {
+	// 	dsn = "host=" + dbHost + " port=" + dbPort + " user=" + dbUser + " password=" + dbPassword + " dbname=" + dbName + " sslmode=require"
+	// }
 
 	for {
 		connection, err := openDB(dsn)
