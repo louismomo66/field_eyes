@@ -224,38 +224,3 @@ Field Eyes uses Redis for caching to improve performance and support ML analysis
 2. **ML Analysis Results Caching**: Analysis results are cached to avoid redundant processing and improve response times.
 3. **User Device Caching**: A user's devices are cached for faster access.
 
-## Environment Configuration
-
-The API requires the following environment variables:
-
-```
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_key
-
-# SMTP Configuration (for password reset emails)
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@example.com
-SMTP_PASSWORD=your_password
-SMTP_FROM=noreply@fieldeyes.com
-
-# Redis Configuration (for caching)
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=your_redis_password
-REDIS_DB=0
-
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=field_eyes
-
-# MQTT Configuration
-MQTT_BROKER_URL=tcp://localhost:1883
-MQTT_USERNAME=your_mqtt_username  # Optional
-MQTT_PASSWORD=your_mqtt_password  # Optional
-MQTT_CLIENT_ID=field_eyes_server
-MQTT_TOPIC_ROOT=field_eyes/devices
-```
