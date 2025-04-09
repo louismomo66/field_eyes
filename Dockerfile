@@ -25,18 +25,41 @@ RUN CGO_ENABLED=0 go build -o app/field_eyes_api ./cmd/api
 FROM alpine:latest
 
 # Install necessary packages
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata bash postgresql-client
 
 WORKDIR /app
 
 # Copy the binary from builder
 COPY --from=builder /app/app/field_eyes_api /app/field_eyes_api
 
+# Create a wait-for-it script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+host="$1"\n\
+shift\n\
+cmd="$@"\n\
+\n\
+until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$host" -U "$POSTGRES_USER" -c '\''\q'\''; do\n\
+  >&2 echo "Postgres is unavailable - sleeping"\n\
+  sleep 1\n\
+done\n\
+\n\
+>&2 echo "Postgres is up - executing command"\n\
+exec $cmd' > /app/wait-for-it.sh && chmod +x /app/wait-for-it.sh
+
 # Create empty .env file
 RUN touch .env
+
+# Set default environment variables
+ENV DB_HOST=postgres
+ENV DB_PORT=5432
+ENV DB_USER=postgres
+ENV DB_PASSWORD=postgres
+ENV DB_NAME=field_eyes
 
 # Expose port
 EXPOSE 8080
 
-# Run the application
-CMD ["./field_eyes_api"] 
+# Run the application with wait-for-it script
+CMD ["/app/wait-for-it.sh", "postgres", "/app/field_eyes_api"] 
