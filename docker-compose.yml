@@ -1,86 +1,57 @@
-version: '3.8'
+version: '3'
 
 services:
   api:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+    build: .
     ports:
-      - "9004:9004"
-    depends_on:
-      - postgres
-      - redis
-      - mosquitto
+      - "9002:8080"
     environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=field_eyes
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_DB=0
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_SECRETE=${JWT_SECRETE}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USERNAME=${SMTP_USERNAME}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_FROM=${SMTP_FROM}
-      - MQTT_BROKER_URL=tcp://mosquitto:1883
-      - MQTT_USERNAME=${MQTT_USERNAME}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - MQTT_CLIENT_ID=${MQTT_CLIENT_ID:-field_eyes_server}
-      - MQTT_TOPIC_ROOT=${MQTT_TOPIC_ROOT:-field_eyes/devices}
-    restart: unless-stopped
+      - DSN=host=postgres port=5432 user=postgres password=postgres dbname=field_eyes sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
-      - field-eyes-network
+      - app-network
 
   postgres:
-    image: postgres:14-alpine
-    ports:
-      - "5432:5432"
+    image: 'postgres:14.2'
+    restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=field_eyes
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: field_eyes
+    ports:
+      - "5434:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - ./db-data/postgres/:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
-      - field-eyes-network
+      - app-network
 
   redis:
-    image: redis:7-alpine
+    image: 'redis:7'
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-    restart: unless-stopped
+      - ./db-data/redis/:/data
     networks:
-      - field-eyes-network
-      
-  mosquitto:
-    image: eclipse-mosquitto:2
+      - app-network
+
+  mqtt:
+    image: 'eclipse-mosquitto:2'
     ports:
       - "1883:1883"
       - "9001:9001"
     volumes:
-      - mosquitto-data:/mosquitto/data
-      - mosquitto-log:/mosquitto/log
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-    restart: unless-stopped
+      - ./db-data/mqtt/:/mosquitto/data
+      - ./db-data/mqtt/log/:/mosquitto/log
     networks:
-      - field-eyes-network
-
-volumes:
-  postgres-data:
-  redis-data:
-  mosquitto-data:
-  mosquitto-log:
+      - app-network
 
 networks:
-  field-eyes-network:
+  app-network:
     driver: bridge 
