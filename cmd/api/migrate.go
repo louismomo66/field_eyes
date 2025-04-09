@@ -27,7 +27,7 @@ func main() {
 
 	dbPort := os.Getenv("DB_PORT")
 	if dbPort == "" {
-		dbPort = "5432"
+		dbPort = "5434"
 	}
 
 	dbUser := os.Getenv("DB_USER")
@@ -60,12 +60,14 @@ func main() {
 	}
 	infoLog.Println("Connected to database!")
 
-	// Create models
-	models := data.New(db)
+	// Drop existing repository tables
+	infoLog.Println("Dropping existing repository tables...")
+	db.Exec("DROP TABLE IF EXISTS notification_repositories CASCADE")
+	db.Exec("DROP TABLE IF EXISTS notifications CASCADE")
 
 	// Migrate the database
 	infoLog.Println("Running migrations...")
-	if err := db.AutoMigrate(&models.User, &models.Device, &models.DeviceData, &models.Notification); err != nil {
+	if err := db.AutoMigrate(&data.User{}, &data.Device{}, &data.DeviceData{}, &data.Notification{}); err != nil {
 		errorLog.Fatalf("Migration failed: %v", err)
 	}
 	infoLog.Println("Migrations completed successfully!")
