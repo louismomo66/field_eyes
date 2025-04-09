@@ -23,19 +23,21 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 
 # Set the working directory in the container
-WORKDIR /root/
+WORKDIR /app
 
-# Copy the pre-built binary file and the .env file from the previous stage
+# Copy the pre-built binary file from the previous stage
 COPY --from=builder /app/field_eyes_api .
-COPY --from=builder /app/.env .
+
+# Create empty .env file
+RUN touch .env
 
 # Set default environment variables
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_USER=postgres
-ENV DB_PASSWORD=postgres123456
+ENV DB_PASSWORD=postgres
 ENV DB_NAME=field_eyes
-ENV DSN=host=postgres port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable
+ENV DSN=host=postgres port=5432 user=postgres password=postgres dbname=field_eyes sslmode=disable
 
 # Expose port
 EXPOSE 9004
