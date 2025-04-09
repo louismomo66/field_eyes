@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Binaries and build artifacts
+bin/
+tmp/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Go specific
+vendor/
+*.test
+*.out
+
+# Miscellaneous
+README.md
+LICENSE
+Makefile 
