@@ -36,11 +36,13 @@ COPY --from=builder /app/app/field_eyes_api /app/field_eyes_api
 RUN echo '#!/bin/bash' > /app/wait-for-it.sh && \
     echo 'set -e' >> /app/wait-for-it.sh && \
     echo '' >> /app/wait-for-it.sh && \
-    echo 'host="$1"' >> /app/wait-for-it.sh && \
+    echo 'host="${DB_HOST:-postgres}"' >> /app/wait-for-it.sh && \
+    echo 'user="${DB_USER:-postgres}"' >> /app/wait-for-it.sh && \
+    echo 'password="${DB_PASSWORD:-postgres}"' >> /app/wait-for-it.sh && \
     echo 'shift' >> /app/wait-for-it.sh && \
     echo 'cmd="$@"' >> /app/wait-for-it.sh && \
     echo '' >> /app/wait-for-it.sh && \
-    echo 'until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$host" -U "$POSTGRES_USER" -c '\''\q'\''; do' >> /app/wait-for-it.sh && \
+    echo 'until PGPASSWORD=$password psql -h "$host" -U "$user" -c '\''\q'\''; do' >> /app/wait-for-it.sh && \
     echo '  >&2 echo "Postgres is unavailable - sleeping"' >> /app/wait-for-it.sh && \
     echo '  sleep 1' >> /app/wait-for-it.sh && \
     echo 'done' >> /app/wait-for-it.sh && \
@@ -52,15 +54,19 @@ RUN echo '#!/bin/bash' > /app/wait-for-it.sh && \
 # Create empty .env file
 RUN touch .env
 
-# Set default environment variables
+# Set default environment variables for multi-container setup
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_USER=postgres
 ENV DB_PASSWORD=postgres
 ENV DB_NAME=field_eyes
+ENV REDIS_HOST=redis
+ENV REDIS_PORT=6379
+ENV MQTT_HOST=mqtt
+ENV MQTT_PORT=1883
 
 # Expose port
 EXPOSE 8080
 
 # Run the application with wait-for-it script
-CMD ["/bin/bash", "/app/wait-for-it.sh", "postgres", "/app/field_eyes_api"] 
+CMD ["/bin/bash", "/app/wait-for-it.sh", "/app/field_eyes_api"] 
