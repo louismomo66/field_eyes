@@ -45,6 +45,12 @@ RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'echo "DB_USER: $DB_USER"' >> /app/start.sh && \
     echo 'echo "DB_NAME: $DB_NAME"' >> /app/start.sh && \
     echo '' >> /app/start.sh && \
+    echo '# Check if DB_HOST is set to localhost and override if needed' >> /app/start.sh && \
+    echo 'if [ "$DB_HOST" = "localhost" ]; then' >> /app/start.sh && \
+    echo '  echo "WARNING: DB_HOST is set to localhost, which may not work in a containerized environment"' >> /app/start.sh && \
+    echo '  echo "If you are deploying to Render, make sure to set DB_HOST to your PostgreSQL service hostname"' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
     echo '# Create a .env file with the environment variables' >> /app/start.sh && \
     echo 'cat > /app/.env << EOF' >> /app/start.sh && \
     echo 'DB_HOST=$DB_HOST' >> /app/start.sh && \
