@@ -32,21 +32,22 @@ WORKDIR /app
 # Copy the binary from builder
 COPY --from=builder /app/app/field_eyes_api /app/field_eyes_api
 
-# Create a wait-for-it script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-host="$1"\n\
-shift\n\
-cmd="$@"\n\
-\n\
-until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$host" -U "$POSTGRES_USER" -c '\''\q'\''; do\n\
-  >&2 echo "Postgres is unavailable - sleeping"\n\
-  sleep 1\n\
-done\n\
-\n\
->&2 echo "Postgres is up - executing command"\n\
-exec $cmd' > /app/wait-for-it.sh && chmod +x /app/wait-for-it.sh
+# Create wait-for-it script
+RUN echo '#!/bin/bash' > /app/wait-for-it.sh && \
+    echo 'set -e' >> /app/wait-for-it.sh && \
+    echo '' >> /app/wait-for-it.sh && \
+    echo 'host="$1"' >> /app/wait-for-it.sh && \
+    echo 'shift' >> /app/wait-for-it.sh && \
+    echo 'cmd="$@"' >> /app/wait-for-it.sh && \
+    echo '' >> /app/wait-for-it.sh && \
+    echo 'until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$host" -U "$POSTGRES_USER" -c '\''\q'\''; do' >> /app/wait-for-it.sh && \
+    echo '  >&2 echo "Postgres is unavailable - sleeping"' >> /app/wait-for-it.sh && \
+    echo '  sleep 1' >> /app/wait-for-it.sh && \
+    echo 'done' >> /app/wait-for-it.sh && \
+    echo '' >> /app/wait-for-it.sh && \
+    echo '>&2 echo "Postgres is up - executing command"' >> /app/wait-for-it.sh && \
+    echo 'exec $cmd' >> /app/wait-for-it.sh && \
+    chmod +x /app/wait-for-it.sh
 
 # Create empty .env file
 RUN touch .env
@@ -62,4 +63,4 @@ ENV DB_NAME=field_eyes
 EXPOSE 8080
 
 # Run the application with wait-for-it script
-CMD ["/app/wait-for-it.sh", "postgres", "/app/field_eyes_api"] 
+CMD ["/bin/bash", "/app/wait-for-it.sh", "postgres", "/app/field_eyes_api"] 
