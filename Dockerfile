@@ -31,6 +31,14 @@ COPY --from=builder /app/field_eyes_api .
 # Create empty .env file
 RUN touch .env
 
+# Set default environment variables
+ENV DB_HOST=postgres
+ENV DB_PORT=5432
+ENV DB_USER=postgres
+ENV DB_PASSWORD=postgres
+ENV DB_NAME=field_eyes
+ENV DSN=host=postgres port=5432 user=postgres password=postgres dbname=field_eyes sslmode=disable
+
 # Expose port
 EXPOSE 9004
 
