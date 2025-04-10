@@ -13,14 +13,14 @@ RUN go mod download
 # Copy the local package files to the container's workspace
 COPY . .
 
-# Build the application with debug info
-RUN go build -o field_eyes_api ./cmd/api
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -o field_eyes_api ./cmd/api
 
 # Use a lightweight Alpine image
 FROM alpine:latest
 
-# Install ca-certificates and wget for health checks
-RUN apk --no-cache add ca-certificates wget
+# Install necessary packages for debugging and health checks
+RUN apk --no-cache add ca-certificates wget curl net-tools postgresql-client
 
 # Set the working directory in the container
 WORKDIR /app
@@ -28,8 +28,8 @@ WORKDIR /app
 # Copy the pre-built binary file from the previous stage
 COPY --from=builder /app/field_eyes_api .
 
-# Copy the template directory if it exists
-COPY --from=builder /app/templates ./templates
+# Create directories
+RUN mkdir -p ./templates
 
 # Create empty .env file
 RUN touch .env
@@ -46,9 +46,24 @@ ENV JWT_SECRET=fieldeystuliSmartbalimi
 # Expose port
 EXPOSE 9004
 
-# Add the health check
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+# Add the health check with longer initial wait
+HEALTHCHECK --interval=5s --timeout=10s --start-period=20s --retries=5 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:9004/health || exit 1
 
-# Run in foreground for debugging
-CMD ["./field_eyes_api"] 
+# Create startup script that adds more debugging
+RUN echo '#!/bin/sh' > /app/startup.sh && \
+    echo 'echo "Starting Field Eyes API on Back4App..."' >> /app/startup.sh && \
+    echo 'echo "Current directory: $(pwd)"' >> /app/startup.sh && \
+    echo 'ls -la' >> /app/startup.sh && \
+    echo 'echo "Network interfaces:"' >> /app/startup.sh && \
+    echo 'ip addr || echo "ip command not available"' >> /app/startup.sh && \
+    echo 'echo "Checking listening ports before starting:"' >> /app/startup.sh && \
+    echo 'netstat -tulpn || echo "netstat command not available"' >> /app/startup.sh && \
+    echo 'echo "Starting application with port 9004..."' >> /app/startup.sh && \
+    echo 'echo "Environment variables:"' >> /app/startup.sh && \
+    echo 'env | grep -E "DB_|JWT_|PORT"' >> /app/startup.sh && \
+    echo './field_eyes_api' >> /app/startup.sh && \
+    chmod +x /app/startup.sh
+
+# Run the startup script for the app
+CMD ["/app/startup.sh"] 

@@ -81,6 +81,11 @@ test:
 	@echo "Running tests..."
 	go test -v ./...
 
+# Kill processes on port 9004
+kill:
+	@echo "Killing processes on port 9004..."
+	@./kill_processes.sh
+
 # Database migrations
 .PHONY: migrate
 migrate:
