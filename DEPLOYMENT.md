@@ -43,12 +43,12 @@ docker-compose --profile cloud push api-cloud
 5. Configure the following settings:
    - Port: 9004
    - Environment Variables:
-     - DB_HOST: (your database host)
-     - DB_PORT: (your database port)
-     - DB_USER: (your database username)
-     - DB_PASSWORD: (your database password)
-     - DB_NAME: (your database name)
-     - DSN: host=(your database host) port=(your database port) user=(your database username) password=(your database password) dbname=(your database name) sslmode=disable
+     - DB_HOST: localhost
+     - DB_PORT: 5432
+     - DB_USER: postgres
+     - DB_PASSWORD: postgres123456
+     - DB_NAME: field_eyes
+     - DSN: host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable
      - JWT_SECRET: (your JWT secret)
    - Health Check Path: /health
 
@@ -59,11 +59,12 @@ You have two options for the database:
 #### Option A: Using Back4App's Database Service
 1. Create a new PostgreSQL database in Back4App
 2. Configure the connection settings in your container's environment variables
+3. Make sure to keep DB_HOST as "localhost" - Back4App will handle the connection mapping
 
 #### Option B: Using External Database
 1. Use any PostgreSQL provider (AWS RDS, DigitalOcean, etc.)
 2. Make sure the database is accessible from Back4App
-3. Configure the connection settings in your container's environment variables
+3. Update the connection settings in your container's environment variables
 
 ### 4. Verify Deployment
 
@@ -79,8 +80,8 @@ If your container fails to start or becomes unhealthy:
 2. Verify that your database connection settings are correct
 3. Make sure the health check endpoint is working
 4. Ensure that port 9004 is exposed in your Dockerfile and correctly mapped in the container settings
-5. If you see "no such host" errors, ensure your environment variables are properly set
-6. If the database connection fails, check if the database is accessible from the container
+5. If you see "no such host" errors, ensure you're using "localhost" for DB_HOST
+6. If using Back4App's database, make sure you're not trying to use "postgres" as the host name
 
 ## Additional Configuration
 
