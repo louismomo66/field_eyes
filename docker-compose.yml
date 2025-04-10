@@ -28,7 +28,7 @@ services:
   # Simplified service for Back4App with environment variables provided by the platform
   api-cloud:
     build: .
-    image: "${REGISTRY_URL}/fieldeyes:latest"
+    image: "${REGISTRY_URL:-yourbackend}/fieldeyes:latest"
     ports:
       - "9004:9004"
     environment:

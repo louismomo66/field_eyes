@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -499,8 +501,34 @@ func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Re
 // HealthCheck is a simple health check endpoint that returns 200 OK if the service is running.
 // This is used by cloud providers to check if the service is healthy.
 func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	// Log detailed information about the health check request
+	app.InfoLog.Printf("Health check request received from %s", r.RemoteAddr)
+	app.InfoLog.Printf("Server is running and responding on port %s", webPort)
+
+	// Log relevant environment variables for debugging
+	app.InfoLog.Printf("Environment: DB_HOST=%s", os.Getenv("DB_HOST"))
+	app.InfoLog.Printf("Environment: DB_PORT=%s", os.Getenv("DB_PORT"))
+	app.InfoLog.Printf("Environment: Using DSN=%s", os.Getenv("DSN"))
+
+	// Check database connection if available
+	var dbStatus string
+	if app.DB != nil {
+		sqlDB, err := app.DB.DB()
+		if err != nil || sqlDB.Ping() != nil {
+			dbStatus = "disconnected"
+		} else {
+			dbStatus = "connected"
+		}
+	} else {
+		dbStatus = "not configured"
+	}
+
+	// Send response
 	app.writeJSON(w, http.StatusOK, map[string]string{
-		"status":  "ok",
-		"service": "field_eyes_api",
+		"status":    "ok",
+		"service":   "field_eyes_api",
+		"timestamp": time.Now().Format(time.RFC3339),
+		"db_status": dbStatus,
+		"port":      webPort,
 	})
 }

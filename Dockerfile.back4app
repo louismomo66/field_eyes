@@ -1,0 +1,54 @@
+# Use an official Go runtime as a base
+FROM golang:1.22.2 as builder
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy go mod and sum files
+COPY go.mod go.sum ./
+
+# Download all dependencies
+RUN go mod download
+
+# Copy the local package files to the container's workspace
+COPY . .
+
+# Build the application with debug info
+RUN go build -o field_eyes_api ./cmd/api
+
+# Use a lightweight Alpine image
+FROM alpine:latest
+
+# Install ca-certificates and wget for health checks
+RUN apk --no-cache add ca-certificates wget
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the pre-built binary file from the previous stage
+COPY --from=builder /app/field_eyes_api .
+
+# Copy the template directory if it exists
+COPY --from=builder /app/templates ./templates
+
+# Create empty .env file
+RUN touch .env
+
+# Set default environment variables
+ENV DB_HOST=localhost
+ENV DB_PORT=5432
+ENV DB_USER=postgres
+ENV DB_PASSWORD=postgres123456
+ENV DB_NAME=field_eyes
+ENV DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
+ENV JWT_SECRET=fieldeystuliSmartbalimi
+
+# Expose port
+EXPOSE 9004
+
+# Add the health check
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:9004/health || exit 1
+
+# Run in foreground for debugging
+CMD ["./field_eyes_api"] 
