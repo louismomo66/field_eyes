@@ -37,13 +37,13 @@ COPY --from=builder /app/field_eyes_api .
 # Create empty .env file
 RUN touch .env
 
-# Set default environment variables that can be overridden at runtime
-ENV DB_HOST=${DB_HOST:-postgres}
-ENV DB_PORT=${DB_PORT:-5432}
-ENV DB_USER=${DB_USER:-postgres}
-ENV DB_PASSWORD=${DB_PASSWORD:-postgres123456}
-ENV DB_NAME=${DB_NAME:-field_eyes}
-ENV DSN=${DSN:-host=${DB_HOST} port=${DB_PORT} user=${DB_USER} password=${DB_PASSWORD} dbname=${DB_NAME} sslmode=disable}
+# Set default environment variables
+ENV DB_HOST=postgres
+ENV DB_PORT=5432
+ENV DB_USER=postgres
+ENV DB_PASSWORD=postgres123456
+ENV DB_NAME=field_eyes
+ENV DSN="host=postgres port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
 
 # Expose port
 EXPOSE 9004

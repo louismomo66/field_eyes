@@ -37,17 +37,23 @@ run-local:
 	cp .env.local .env
 	go run ./cmd/api
 
-# Build Docker image
+# Build Docker image for development
 .PHONY: docker-build
 docker-build:
 	@echo "Building Docker image..."
-	docker-compose build
+	docker-compose --profile dev build
 
-# Start all Docker containers
+# Build Docker image for cloud deployment
+.PHONY: docker-build-cloud
+docker-build-cloud:
+	@echo "Building Docker image for cloud deployment..."
+	docker-compose --profile cloud build api-cloud
+
+# Start all Docker containers for development
 .PHONY: up
 up: build docker-build
 	@echo "Starting Docker containers..."
-	docker-compose up -d
+	docker-compose --profile dev up -d
 
 # Stop all Docker containers
 .PHONY: down
@@ -83,10 +89,11 @@ migrate:
 
 # Deploy to cloud platform
 .PHONY: deploy
-deploy: docker-build
+deploy: docker-build-cloud
 	@echo "Deploying to cloud platform..."
 	@echo "Make sure you are logged in to the cloud platform's CLI"
-	docker-compose push api
+	@echo "Set REGISTRY_URL environment variable to your registry URL"
+	docker-compose --profile cloud push api-cloud
 
 # All-in-one command to start development environment
 .PHONY: dev
