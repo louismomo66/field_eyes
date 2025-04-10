@@ -1,16 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"field_eyes/data"
 	"field_eyes/pkg/email"
 	"log"
 	"sync"
-
-	"gorm.io/gorm"
 )
 
 type Config struct {
-	DB            *gorm.DB
+	DB            *sql.DB
 	InfoLog       *log.Logger
 	ErrorLog      *log.Logger
 	Wait          *sync.WaitGroup

@@ -501,11 +501,17 @@ func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Re
 // HealthCheck is a simple health check endpoint that returns 200 OK if the service is running.
 // This is used by cloud providers to check if the service is healthy.
 func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	// Log detailed information about the health check request
-	app.InfoLog.Printf("Health check request received from %s", r.RemoteAddr)
-	app.InfoLog.Printf("Server is running and responding on port %s", webPort)
+	// Log the health check request
+	app.InfoLog.Printf("Health check request from %s", r.RemoteAddr)
 
-	// Log relevant environment variables for debugging
+	// Get port information
+	webPort := os.Getenv("PORT")
+	if webPort == "" {
+		webPort = "9004"
+	}
+	app.InfoLog.Printf("Web server is configured to listen on port %s", webPort)
+
+	// Log environment variables for debugging
 	app.InfoLog.Printf("Environment: DB_HOST=%s", os.Getenv("DB_HOST"))
 	app.InfoLog.Printf("Environment: DB_PORT=%s", os.Getenv("DB_PORT"))
 	app.InfoLog.Printf("Environment: Using DSN=%s", os.Getenv("DSN"))
@@ -513,14 +519,17 @@ func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Check database connection if available
 	var dbStatus string
 	if app.DB != nil {
-		sqlDB, err := app.DB.DB()
-		if err != nil || sqlDB.Ping() != nil {
+		err := app.DB.Ping()
+		if err != nil {
 			dbStatus = "disconnected"
+			app.ErrorLog.Printf("Database ping failed: %v", err)
 		} else {
 			dbStatus = "connected"
+			app.InfoLog.Printf("Database ping successful")
 		}
 	} else {
 		dbStatus = "not configured"
+		app.ErrorLog.Printf("Database not configured")
 	}
 
 	// Send response

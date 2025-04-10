@@ -1,7 +1,9 @@
 package data
 
 import (
+	"database/sql"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"time"
@@ -12,11 +14,14 @@ import (
 
 // User represents the users table in the database.
 type User struct {
-	gorm.Model
+	ID           uint           `gorm:"primaryKey" json:"id"`
 	Username     string         `gorm:"type:varchar(100);not null" json:"username"`
+	FirstName    string         `gorm:"type:varchar(100)" json:"first_name"`
+	LastName     string         `gorm:"type:varchar(100)" json:"last_name"`
 	Email        string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"email"`
-	Password     string         `gorm:"type:varchar(255);not null" json:"-"`
+	Password     []byte         `gorm:"type:varchar(255);not null" json:"-"`
 	TempPassword string         `json:"password" gorm:"-"` // Temporary field for password unmarshaling
+	Photo        string         `gorm:"type:varchar(255)" json:"photo"`
 	Devices      []Device       `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"devices,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
@@ -27,137 +32,214 @@ type User struct {
 	OTPExpiresAt time.Time `json:"-"`
 }
 
-// UserRepository implements UserInterface using GORM.
+// UserRepository implements UserInterface using standard SQL queries.
 type UserRepository struct {
-	db *gorm.DB
+	DB *sql.DB
 }
 
 // NewUserRepository creates a new instance of UserRepository.
-func NewUserRepository(db *gorm.DB) UserInterface {
-	return &UserRepository{db: db}
-}
-
-// HashPassword creates a bcrypt hash of the password
-func HashPassword(password string) (string, error) {
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
+func NewUserRepository(db *sql.DB) UserInterface {
+	return &UserRepository{DB: db}
 }
 
 // GetAll retrieves all users from the database, including their devices.
 func (r *UserRepository) GetAll() ([]*User, error) {
+	query := `SELECT id, username, first_name, last_name, email, password, photo, created_at, updated_at 
+			  FROM users`
+
+	rows, err := r.DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	var users []*User
-	result := r.db.Preload("Devices").Find(&users)
-	return users, result.Error
+	for rows.Next() {
+		var user User
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.FirstName,
+			&user.LastName,
+			&user.Email,
+			&user.Password,
+			&user.Photo,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
-// GetByEmail retrieves a user by their email, including their devices.
-func (r *UserRepository) GetByEmail(email string) (*User, error) {
+// GetByEmail retrieves a user by email
+func (u *UserRepository) GetByEmail(email string) (*User, error) {
+	query := `SELECT id, username, first_name, last_name, email, password, photo, created_at, updated_at 
+			  FROM users WHERE email = $1`
+
 	var user User
-	result := r.db.Where("email = ?", email).Preload("Devices").First(&user)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, nil
+	row := u.DB.QueryRow(query, email)
+
+	err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Password,
+		&user.Photo,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("user with email %s not found", email)
+		}
+		return nil, err
 	}
-	return &user, result.Error
+
+	return &user, nil
 }
 
 // GetOne retrieves a user by their ID, including their devices.
 func (r *UserRepository) GetOne(id uint) (*User, error) {
+	query := `SELECT id, username, first_name, last_name, email, password, photo, created_at, updated_at 
+			  FROM users WHERE id = $1`
+
 	var user User
-	result := r.db.Preload("Devices").First(&user, id)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, nil
+	row := r.DB.QueryRow(query, id)
+
+	err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Password,
+		&user.Photo,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return &user, result.Error
+
+	return &user, nil
 }
 
-// Insert creates a new user in the database after hashing the password.
-func (r *UserRepository) Insert(user *User) (uint, error) { // Changed return type to match interface
-	// Hash the password before saving
-	hashedPassword, err := HashPassword(user.TempPassword)
+// Insert adds a new user to the database
+func (u *UserRepository) Insert(user *User) (uint, error) {
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.TempPassword), 12)
 	if err != nil {
 		return 0, err
 	}
-	user.Password = hashedPassword
 
-	result := r.db.Create(user)
-	if result.Error != nil {
-		return 0, result.Error
+	query := `INSERT INTO users (username, first_name, last_name, email, password, photo, created_at, updated_at)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
+
+	var id uint
+	err = u.DB.QueryRow(
+		query,
+		user.Username,
+		user.FirstName,
+		user.LastName,
+		user.Email,
+		hashedPassword,
+		user.Photo,
+		time.Now(),
+		time.Now(),
+	).Scan(&id)
+
+	if err != nil {
+		return 0, err
 	}
-	return user.Model.ID, nil // Using the embedded Model's ID field
+
+	return id, nil
 }
 
 // Update modifies an existing user in the database.
 func (r *UserRepository) Update(user *User) error {
-	// If the password is being updated, hash it
-	if user.Password != "" {
-		hashedPassword, err := HashPassword(user.Password)
+	// If the password is being updated (via TempPassword field)
+	if user.TempPassword != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.TempPassword), 12)
 		if err != nil {
 			return err
 		}
 		user.Password = hashedPassword
 	} else {
-		// Prevent overwriting the password with an empty string
+		// Prevent overwriting the password with an empty value
 		var existingUser User
-		if err := r.db.First(&existingUser, user.Model.ID).Error; err != nil { // Using the embedded Model's ID field
+		if err := r.DB.QueryRow("SELECT password FROM users WHERE id = $1", user.ID).Scan(&existingUser.Password); err != nil {
 			return err
 		}
 		user.Password = existingUser.Password
 	}
 
-	result := r.db.Save(user)
-	return result.Error
+	query := `UPDATE users SET username = $1, first_name = $2, last_name = $3, email = $4, password = $5, photo = $6, updated_at = $7 WHERE id = $8`
+	_, err := r.DB.Exec(query, user.Username, user.FirstName, user.LastName, user.Email, user.Password, user.Photo, time.Now(), user.ID)
+	return err
 }
 
 // Delete removes a user from the database (soft delete).
 func (r *UserRepository) Delete(user *User) error {
-	result := r.db.Delete(user)
-	return result.Error
+	query := `UPDATE users SET deleted_at = $1 WHERE id = $2`
+	_, err := r.DB.Exec(query, time.Now(), user.ID)
+	return err
 }
 
 // DeleteByID removes a user by their ID (soft delete).
 func (r *UserRepository) DeleteByID(id uint) error {
-	result := r.db.Delete(&User{}, id)
-	return result.Error
+	query := `UPDATE users SET deleted_at = $1 WHERE id = $2`
+	_, err := r.DB.Exec(query, time.Now(), id)
+	return err
 }
 
 // ResetPassword updates the password for a user.
 func (r *UserRepository) ResetPassword(userID uint, newPassword string) error {
-	var user User
-	if err := r.db.First(&user, userID).Error; err != nil {
-		return err
-	}
-
-	hashedPassword, err := HashPassword(newPassword)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
 	if err != nil {
 		return err
 	}
 
-	user.Password = hashedPassword
-	result := r.db.Save(&user)
-	return result.Error
+	query := `UPDATE users SET password = $1 WHERE id = $2`
+	_, err = r.DB.Exec(query, hashedPassword, userID)
+	return err
 }
 
-// PasswordMatches checks if the provided plain text password matches the stored hashed password.
-func (r *UserRepository) PasswordMatches(user *User, plainText string) (bool, error) {
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(plainText))
+// PasswordMatches checks if the provided password matches the hashed one in the database
+func (u *UserRepository) PasswordMatches(user *User, plainText string) (bool, error) {
+	err := bcrypt.CompareHashAndPassword(user.Password, []byte(plainText))
 	if err != nil {
-		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+		switch {
+		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
 			return false, nil
+		default:
+			return false, err
 		}
-		return false, err
 	}
+
 	return true, nil
 }
 
 // GenerateAndSaveOTP generates a new OTP code for the user and saves it to the database.
 func (r *UserRepository) GenerateAndSaveOTP(email string) (string, error) {
 	var user User
-	result := r.db.Where("email = ?", email).First(&user)
-	if result.Error != nil {
-		return "", result.Error
+	if err := r.DB.QueryRow("SELECT id, password FROM users WHERE email = $1", email).Scan(&user.ID, &user.Password); err != nil {
+		return "", err
 	}
 
 	// Generate a random 6-digit OTP using crypto/rand for better security
@@ -165,11 +247,9 @@ func (r *UserRepository) GenerateAndSaveOTP(email string) (string, error) {
 	otp := strconv.Itoa(otpNum)
 
 	// Set OTP and expiration (15 minutes from now)
-	user.OTPCode = otp
-	user.OTPExpiresAt = time.Now().Add(15 * time.Minute)
-
-	// Save the user with the new OTP
-	if err := r.db.Save(&user).Error; err != nil {
+	query := `UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3`
+	_, err := r.DB.Exec(query, otp, time.Now().Add(15*time.Minute), user.ID)
+	if err != nil {
 		return "", err
 	}
 
@@ -179,9 +259,8 @@ func (r *UserRepository) GenerateAndSaveOTP(email string) (string, error) {
 // VerifyOTP checks if the provided OTP is valid for the user
 func (r *UserRepository) VerifyOTP(email, otp string) (bool, error) {
 	var user User
-	result := r.db.Where("email = ?", email).First(&user)
-	if result.Error != nil {
-		return false, result.Error
+	if err := r.DB.QueryRow("SELECT otp_code, otp_expires_at FROM users WHERE email = $1", email).Scan(&user.OTPCode, &user.OTPExpiresAt); err != nil {
+		return false, err
 	}
 
 	// Check if OTP matches and has not expired
@@ -208,20 +287,18 @@ func (r *UserRepository) ResetPasswordWithOTP(email, otp, newPassword string) er
 	}
 
 	var user User
-	if err := r.db.Where("email = ?", email).First(&user).Error; err != nil {
+	if err := r.DB.QueryRow("SELECT id, password FROM users WHERE email = $1", email).Scan(&user.ID, &user.Password); err != nil {
 		return err
 	}
 
 	// Hash the new password
-	hashedPassword, err := HashPassword(newPassword)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
 	if err != nil {
 		return err
 	}
 
 	// Update the password and clear the OTP
-	user.Password = hashedPassword
-	user.OTPCode = ""
-
-	// Save the changes
-	return r.db.Save(&user).Error
+	query := `UPDATE users SET password = $1, otp_code = $2, otp_expires_at = $3 WHERE id = $4`
+	_, err = r.DB.Exec(query, hashedPassword, "", time.Time{}, user.ID)
+	return err
 }

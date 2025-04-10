@@ -1,146 +1,98 @@
 package main
 
 import (
-	"field_eyes/data"
-	"fmt"
+	"database/sql"
 	"log"
 	"os"
 	"time"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	_ "github.com/lib/pq"
 )
 
-func (app *Config) initDB() *gorm.DB {
+func (app *Config) initDB() *sql.DB {
+	// Check for development mode
+	devMode := os.Getenv("DEV_MODE")
+	if devMode == "true" {
+		log.Println("⚠️ Running in DEVELOPMENT MODE without database ⚠️")
+		log.Println("⚠️ Database features will not work ⚠️")
+		return nil
+	}
+
 	conn := connectToDB()
 	if conn == nil {
-		log.Panic("can't connect to database")
+		log.Println("⚠️ Failed to connect to database ⚠️")
+		log.Println("⚠️ Continuing in limited mode - database features will not work ⚠️")
+		return nil
 	}
 
-	// Auto-migrate the schema using actual model structs, not interfaces
-	if err := conn.AutoMigrate(&data.User{}, &data.Device{}, &data.DeviceData{}, &data.Notification{}); err != nil {
-		log.Panic("failed to migrate database:", err)
+	// Test the connection
+	if err := conn.Ping(); err != nil {
+		log.Printf("⚠️ Failed to ping database: %v ⚠️", err)
+		log.Println("⚠️ Continuing in limited mode - database features will not work ⚠️")
+		return nil
 	}
-	log.Println("Database migration completed successfully")
 
+	log.Println("Database connected successfully")
 	return conn
 }
 
-func connectToDB() *gorm.DB {
-	counts := 0
-
-	// First try to connect using DATABASE_URL (preferred for Docker)
+func connectToDB() *sql.DB {
+	// First try to connect using DATABASE_URL (preferred for Docker and Render)
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL != "" {
-		log.Printf("Found DATABASE_URL, attempting to connect: %s", maskPassword(dbURL))
-		// Try to connect with the DATABASE_URL directly
-		for attempt := 0; attempt < 5; attempt++ {
-			connection, err := openDB(dbURL)
+		log.Printf("Found DATABASE_URL, attempting to connect")
+		db, err := sql.Open("postgres", dbURL)
+		if err == nil {
+			// Test the connection
+			err = db.Ping()
 			if err == nil {
-				log.Print("connected to database using DATABASE_URL!")
-				return connection
+				log.Print("Connected to database using DATABASE_URL!")
+
+				// Configure connection pool
+				db.SetMaxIdleConns(10)
+				db.SetMaxOpenConns(100)
+				db.SetConnMaxLifetime(time.Hour)
+
+				return db
 			}
-			log.Printf("Connection error using DATABASE_URL (attempt %d/5): %v", attempt+1, err)
-			time.Sleep(1 * time.Second)
+			log.Printf("Connection ping error: %v", err)
 		}
-		log.Println("Failed to connect using DATABASE_URL, falling back to DSN format")
+		log.Printf("Connection error using DATABASE_URL: %v", err)
 	}
 
-	// Get database connection details from environment variables or use defaults
-	dbHost := os.Getenv("DB_HOST")
-	if dbHost == "" {
-		dbHost = "localhost"
-	}
-	log.Printf("Using DB_HOST: %s", dbHost)
+	// // Fall back to DSN if DATABASE_URL not set or failed
+	// dsn := os.Getenv("DSN")
+	// if dsn == "" {
+	// 	// Default DSN for Docker
+	// 	dsn = "host=db port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
+	// }
+	// log.Printf("Using DSN format")
 
-	dbPort := os.Getenv("DB_PORT")
-	if dbPort == "" {
-		dbPort = "5432"
-	}
-	log.Printf("Using DB_PORT: %s", dbPort)
+	// // Try to connect with retries
+	// var db *sql.DB
+	// var err error
 
-	dbUser := os.Getenv("DB_USER")
-	if dbUser == "" {
-		dbUser = "postgres"
-	}
-	log.Printf("Using DB_USER: %s", dbUser)
+	// for attempts := 0; attempts < 10; attempts++ {
+	// 	db, err = sql.Open("postgres", dsn)
+	// 	if err == nil {
+	// 		// Test the connection
+	// 		err = db.Ping()
+	// 		if err == nil {
+	// 			log.Print("Connected to database using DSN!")
 
-	dbPassword := os.Getenv("DB_PASSWORD")
-	if dbPassword == "" {
-		dbPassword = "postgres"
-	}
-	log.Printf("Using DB_PASSWORD: %s", maskPassword(dbPassword))
+	// 			// Configure connection pool
+	// 			db.SetMaxIdleConns(10)
+	// 			db.SetMaxOpenConns(100)
+	// 			db.SetConnMaxLifetime(time.Hour)
 
-	dbName := os.Getenv("DB_NAME")
-	if dbName == "" {
-		dbName = "field_eyes"
-	}
-	log.Printf("Using DB_NAME: %s", dbName)
+	// 			return db
+	// 		}
+	// 	}
 
-	// Construct the DSN string
-	dsn := os.Getenv("DSN")
-	if dsn == "" {
-		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-			dbHost, dbPort, dbUser, dbPassword, dbName)
-	}
+	// 	log.Printf("Attempt %d: Database connection failed: %v", attempts+1, err)
+	// 	time.Sleep(1 * time.Second)
+	// }
 
-	log.Printf("Attempting to connect to database with DSN: %s", maskPassword(dsn))
-
-	for {
-		connection, err := openDB(dsn)
-		if err != nil {
-			log.Println("postgres not yet ready...")
-			log.Printf("Connection error: %v", err)
-		} else {
-			log.Print("connected to database!")
-			return connection
-		}
-
-		if counts > 10 {
-			return nil
-		}
-
-		log.Print("Backing off for 1 second")
-		time.Sleep(1 * time.Second)
-		counts++
-	}
-}
-
-// maskPassword masks the password in a connection string for secure logging
-func maskPassword(connStr string) string {
-	// This is a simple implementation - in production you might want a more robust solution
-	return connStr
-}
-
-func openDB(dsn string) (*gorm.DB, error) {
-	config := &gorm.Config{
-		// You can add GORM configurations here
-		// For example:
-		// Logger: logger.Default.LogMode(logger.Info),
-		// PrepareStmt: true,
-	}
-
-	db, err := gorm.Open(postgres.Open(dsn), config)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the underlying *sql.DB instance
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-
-	// Configure connection pool
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(time.Hour)
-
-	// Test the connection
-	err = sqlDB.Ping()
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
+	log.Println("Failed to connect to database after multiple attempts")
+	return nil
 }

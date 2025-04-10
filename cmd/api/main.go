@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/joho/godotenv"
@@ -16,14 +17,28 @@ import (
 const webPort = "9004"
 
 func (app *Config) serve() {
+	// Get the port from environment or use default
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = webPort // Default to webPort constant
+	}
+
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", webPort),
+		Addr:    fmt.Sprintf(":%s", port),
 		Handler: app.routes(),
 	}
-	app.InfoLog.Println("Starting web server...")
+
+	app.InfoLog.Printf("Starting web server on port %s...", port)
+
 	err := srv.ListenAndServe()
 	if err != nil {
-		log.Panic(err)
+		if strings.Contains(err.Error(), "address already in use") {
+			app.ErrorLog.Printf("Port %s is already in use. Try setting a different PORT in your environment variables.", port)
+			os.Exit(1)
+		} else {
+			app.ErrorLog.Printf("Failed to start server: %v", err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -128,7 +143,7 @@ func main() {
 	db := app.initDB()
 	app.DB = db
 
-	// Initialize data models
+	// Initialize data models - using simplified version
 	app.Models = data.New(db)
 
 	// Initialize MQTT client
