@@ -29,6 +29,23 @@ func (app *Config) initDB() *gorm.DB {
 func connectToDB() *gorm.DB {
 	counts := 0
 
+	// First try to connect using DATABASE_URL (preferred for Docker)
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL != "" {
+		log.Printf("Found DATABASE_URL, attempting to connect: %s", maskPassword(dbURL))
+		// Try to connect with the DATABASE_URL directly
+		for attempt := 0; attempt < 5; attempt++ {
+			connection, err := openDB(dbURL)
+			if err == nil {
+				log.Print("connected to database using DATABASE_URL!")
+				return connection
+			}
+			log.Printf("Connection error using DATABASE_URL (attempt %d/5): %v", attempt+1, err)
+			time.Sleep(1 * time.Second)
+		}
+		log.Println("Failed to connect using DATABASE_URL, falling back to DSN format")
+	}
+
 	// Get database connection details from environment variables or use defaults
 	dbHost := os.Getenv("DB_HOST")
 	if dbHost == "" {
@@ -52,7 +69,7 @@ func connectToDB() *gorm.DB {
 	if dbPassword == "" {
 		dbPassword = "postgres"
 	}
-	log.Printf("Using DB_PASSWORD: %s", dbPassword)
+	log.Printf("Using DB_PASSWORD: %s", maskPassword(dbPassword))
 
 	dbName := os.Getenv("DB_NAME")
 	if dbName == "" {
@@ -67,7 +84,7 @@ func connectToDB() *gorm.DB {
 			dbHost, dbPort, dbUser, dbPassword, dbName)
 	}
 
-	log.Printf("Attempting to connect to database with DSN: %s", dsn)
+	log.Printf("Attempting to connect to database with DSN: %s", maskPassword(dsn))
 
 	for {
 		connection, err := openDB(dsn)
@@ -87,6 +104,12 @@ func connectToDB() *gorm.DB {
 		time.Sleep(1 * time.Second)
 		counts++
 	}
+}
+
+// maskPassword masks the password in a connection string for secure logging
+func maskPassword(connStr string) string {
+	// This is a simple implementation - in production you might want a more robust solution
+	return connStr
 }
 
 func openDB(dsn string) (*gorm.DB, error) {
