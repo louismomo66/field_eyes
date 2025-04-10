@@ -1,97 +1,42 @@
 services:
-  api:
-    build: .
-    ports:
-      - "9004:9004"
-    environment:
-      - DB_HOST=localhost
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres123456
-      - DB_NAME=field_eyes
-      - DSN=host=localhost port=5434 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable
-      - JWT_SECRET=fieldeystuliSmartbalimi
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9004/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    restart: always
-    profiles: ["dev"]
-    
-  # Simplified service for Back4App with environment variables provided by the platform
-  api-cloud:
-    build: .
-    image: "${REGISTRY_URL:-yourbackend}/fieldeyes:latest"
-    ports:
-      - "9004:9004"
-    environment:
-      - DB_HOST=localhost
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres123456
-      - DB_NAME=field_eyes
-      - DSN=host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable
-      - JWT_SECRET=fieldeystuliSmartbalimi
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9004/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    restart: always
-    profiles: ["cloud"]
-
+  # PostgreSQL database service
   postgres:
     image: 'postgres:14.2'
+    container_name: fieldeyes-postgres
+    ports:
+      - "5432:5432"
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123456
       POSTGRES_DB: field_eyes
-    ports:
-      - "5434:5432"
     volumes:
       - ./db-data/postgres/:/var/lib/postgresql/data/
+    networks:
+      - fieldeyes-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - app-network
-    profiles: ["dev"]
 
+  # Redis cache service
   redis:
-    image: 'redis:7'
+    image: 'redis:alpine'
+    container_name: fieldeyes-redis
     ports:
       - "6379:6379"
+    restart: always
     volumes:
       - ./db-data/redis/:/data
     networks:
-      - app-network
-    restart: always
-    profiles: ["dev"]
-
-  mqtt:
-    image: 'eclipse-mosquitto:2'
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./db-data/mqtt/:/mosquitto/data
-      - ./db-data/mqtt/log/:/mosquitto/log
-    networks:
-      - app-network
-    restart: always
-    profiles: ["dev"]
+      - fieldeyes-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 networks:
-  app-network:
+  fieldeyes-network:
     driver: bridge

@@ -34,26 +34,31 @@ func connectToDB() *gorm.DB {
 	if dbHost == "" {
 		dbHost = "localhost"
 	}
+	log.Printf("Using DB_HOST: %s", dbHost)
 
 	dbPort := os.Getenv("DB_PORT")
 	if dbPort == "" {
 		dbPort = "5432"
 	}
+	log.Printf("Using DB_PORT: %s", dbPort)
 
 	dbUser := os.Getenv("DB_USER")
 	if dbUser == "" {
 		dbUser = "postgres"
 	}
+	log.Printf("Using DB_USER: %s", dbUser)
 
 	dbPassword := os.Getenv("DB_PASSWORD")
 	if dbPassword == "" {
 		dbPassword = "postgres"
 	}
+	log.Printf("Using DB_PASSWORD: %s", dbPassword)
 
 	dbName := os.Getenv("DB_NAME")
 	if dbName == "" {
 		dbName = "field_eyes"
 	}
+	log.Printf("Using DB_NAME: %s", dbName)
 
 	// Construct the DSN string
 	dsn := os.Getenv("DSN")

@@ -39,11 +39,10 @@ RUN touch .env
 
 # Set default environment variables
 ENV DB_HOST=localhost
-ENV DB_PORT=5434
+ENV DB_PORT=5432
 ENV DB_USER=postgres
 ENV DB_PASSWORD=postgres123456
 ENV DB_NAME=field_eyes
-ENV DSN="host=localhost port=5434 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
 
 # Expose port
 EXPOSE 9004

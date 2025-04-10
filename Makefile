@@ -41,7 +41,7 @@ run-local:
 .PHONY: docker-build
 docker-build:
 	@echo "Building Docker image..."
-	docker-compose --profile dev build
+	docker-compose build
 
 # Build Docker image for cloud deployment
 .PHONY: docker-build-cloud
@@ -51,15 +51,13 @@ docker-build-cloud:
 
 # Start all Docker containers for development
 .PHONY: up
-up: build docker-build
-	@echo "Starting Docker containers..."
-	docker-compose --profile dev up -d
+up: docker-build docker-up
+	@echo "Docker services started!"
 
 # Stop all Docker containers
 .PHONY: down
-down:
-	@echo "Stopping Docker containers..."
-	docker-compose down
+down: docker-down
+	@echo "Docker services stopped!"
 
 # View Docker container logs
 .PHONY: docker-logs
@@ -109,3 +107,12 @@ dev: build docker-build up
 .PHONY: dev-stop
 dev-stop: down
 	@echo "Development environment stopped!"
+
+# Docker compose commands
+docker-up:
+	@echo "Starting Docker services..."
+	docker-compose up -d
+
+docker-down:
+	@echo "Stopping Docker services..."
+	docker-compose down
