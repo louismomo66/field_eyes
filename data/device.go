@@ -53,6 +53,10 @@ type Notification struct {
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+func (Notification) TableName() string {
+	return "notifications"
+}
+
 // DeviceRepository implements DeviceInterface using GORM.
 type DeviceRepository struct {
 	db *gorm.DB

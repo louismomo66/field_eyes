@@ -495,3 +495,12 @@ func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Re
 		"devices_checked":     len(devices),
 	})
 }
+
+// HealthCheck is a simple health check endpoint that returns 200 OK if the service is running.
+// This is used by cloud providers to check if the service is healthy.
+func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "field_eyes_api",
+	})
+}

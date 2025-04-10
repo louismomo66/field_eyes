@@ -12,6 +12,22 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
+// getJWTSecret returns the JWT secret from environment variables
+// with appropriate fallback and warning messages
+func (app *Config) getJWTSecret() string {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		// Check alternative spelling that might be used
+		secret = os.Getenv("JWT_SECRETE")
+		if secret == "" {
+			app.ErrorLog.Println("WARNING: JWT_SECRET environment variable not set! Using default secret. This is insecure for production.")
+			return "fieldeyes_default_jwt_secret_key"
+		}
+		app.InfoLog.Println("Using JWT_SECRETE instead of JWT_SECRET - consider standardizing to JWT_SECRET")
+	}
+	return secret
+}
+
 func (app *Config) IsAuthenticated(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -24,11 +40,9 @@ func (app *Config) IsAuthenticated(handler http.HandlerFunc) http.HandlerFunc {
 			app.errorJSON(w, errors.New("invalid token format"), http.StatusUnauthorized)
 			return
 		}
-		mySigningKey := os.Getenv("JWT_SECRET")
-		if mySigningKey == "" {
-			app.errorJSON(w, errors.New("internal server error: missing JWT secret"), http.StatusInternalServerError)
-			return
-		}
+
+		mySigningKey := app.getJWTSecret()
+
 		// Parse and validate the token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			// Ensure the signing method is HMAC
@@ -57,12 +71,7 @@ func (app *Config) IsAuthenticated(handler http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func (app *Config) GenerateJWT(user data.User) (string, error) {
-	mySigningKey := os.Getenv("JWT_SECRET")
-	if mySigningKey == "" {
-		// Use a default secret for development
-		app.InfoLog.Println("WARNING: Using default JWT secret. This should not be used in production.")
-		mySigningKey = "fieldeyes_default_jwt_secret_key"
-	}
+	mySigningKey := app.getJWTSecret()
 
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
@@ -94,13 +103,8 @@ func (app *Config) GetUserInfoFromToken(r *http.Request) (uint, string, string, 
 		return 0, "", "", errors.New("invalid token format")
 	}
 
-	// Get the JWT secret from environment variables
-	mySigningKey := os.Getenv("JWT_SECRET")
-	if mySigningKey == "" {
-		// Use a default secret for development
-		app.InfoLog.Println("WARNING: Using default JWT secret for token validation. This should not be used in production.")
-		mySigningKey = "fieldeyes_default_jwt_secret_key"
-	}
+	// Get the JWT secret
+	mySigningKey := app.getJWTSecret()
 
 	// Parse and validate the token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {

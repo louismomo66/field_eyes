@@ -2,6 +2,7 @@ package main
 
 import (
 	"field_eyes/data"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -17,7 +18,7 @@ func (app *Config) initDB() *gorm.DB {
 	}
 
 	// Auto-migrate the schema using actual model structs, not interfaces
-	if err := conn.AutoMigrate(&data.User{}, &data.Device{}, &data.DeviceData{}); err != nil {
+	if err := conn.AutoMigrate(&data.User{}, &data.Device{}, &data.DeviceData{}, &data.Notification{}); err != nil {
 		log.Panic("failed to migrate database:", err)
 	}
 	log.Println("Database migration completed successfully")
@@ -57,8 +58,11 @@ func connectToDB() *gorm.DB {
 	// Construct the DSN string
 	dsn := os.Getenv("DSN")
 	if dsn == "" {
-		dsn = "host=" + dbHost + " port=" + dbPort + " user=" + dbUser + " password=" + dbPassword + " dbname=" + dbName + " sslmode=disable"
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			dbHost, dbPort, dbUser, dbPassword, dbName)
 	}
+
+	log.Printf("Attempting to connect to database with DSN: %s", dsn)
 
 	for {
 		connection, err := openDB(dsn)

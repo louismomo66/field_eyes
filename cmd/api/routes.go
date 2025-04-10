@@ -12,6 +12,10 @@ func (app *Config) routes() http.Handler {
 	//set up middleware
 	mux.Use(middleware.Recoverer)
 	mux.Use(app.EnableCORS)
+
+	// Health check endpoint for cloud providers
+	mux.Get("/health", app.HealthCheck)
+
 	mux.Route("/api", func(r chi.Router) {
 		// User account related endpoints
 		r.Post("/signup", app.Signup)                  // Endpoint for user signup
