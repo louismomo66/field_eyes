@@ -2,8 +2,7 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:14.2
-    container_name: fieldeyes-db
+    image: postgres:15
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123456
@@ -12,38 +11,21 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   redis:
-    image: redis:alpine
-    container_name: fieldeyes-redis
+    image: redis:7
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      
-  api:
+
+  app:
     build: .
-    container_name: fieldeyes-api
     ports:
       - "9004:9004"
+    depends_on:
+      - db
+      - redis
     env_file:
       - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
 volumes:
-  pgdata:
-  redis_data:
+  pgdata: 

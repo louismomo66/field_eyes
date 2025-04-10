@@ -20,6 +20,10 @@ RUN go build -o field_eyes_api ./cmd/api
 # Expose port
 EXPOSE 9004
 
+# Set default environment variables using DATABASE_URL
+ENV DATABASE_URL=postgres://postgres:postgres123456@db:5432/field_eyes?sslmode=disable
+ENV JWT_SECRET=fieldeystuliSmartbalimi
+
 # Command to run the executable
 CMD ["./field_eyes_api"]
 
