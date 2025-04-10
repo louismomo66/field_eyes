@@ -1,7 +1,5 @@
-# Use an official Go runtime as a base
-FROM golang:1.22.2 as builder
+FROM golang:1.22
 
-# Set the working directory inside the container
 WORKDIR /app
 
 # Copy go mod and sum files
@@ -13,39 +11,17 @@ RUN go mod download
 # Copy the local package files to the container's workspace
 COPY . .
 
-# Install godotenv to manage .env files
-RUN go get github.com/joho/godotenv
+# Install required packages
+RUN apt-get update && apt-get install -y wget ca-certificates
 
-# Install wget for health checks
-RUN apt-get update && apt-get install -y wget
-
-# Build the application to run in a scratch container
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
-
-# Use a lightweight Alpine image
-FROM alpine:latest
-
-# Install ca-certificates and wget for health checks
-RUN apk --no-cache add ca-certificates wget
-
-# Set the working directory in the container
-WORKDIR /app
-
-# Copy the pre-built binary file from the previous stage
-COPY --from=builder /app/field_eyes_api .
-
-# Create empty .env file
-RUN touch .env
-
-# Set default environment variables
-ENV DB_HOST=localhost
-ENV DB_PORT=5432
-ENV DB_USER=postgres
-ENV DB_PASSWORD=postgres123456
-ENV DB_NAME=field_eyes
+# Build the application
+RUN go build -o field_eyes_api ./cmd/api
 
 # Expose port
 EXPOSE 9004
 
 # Command to run the executable
-CMD ["./field_eyes_api"] 
+CMD ["./field_eyes_api"]
+
+# Remove Git lock file
+RUN rm -f .git/index.lock 

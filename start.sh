@@ -27,10 +27,25 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
+# Clean up any existing containers
+echo -e "${BLUE}Cleaning up any existing containers...${NC}"
+docker-compose down &>/dev/null || true
+docker rm -f fieldeyes-postgres fieldeyes-redis &>/dev/null || true
+
 # Start the database containers using docker-compose
 echo -e "${BLUE}Starting database containers with docker-compose...${NC}"
-docker-compose down -v &>/dev/null || true
 docker-compose up -d postgres redis
+
+# Get the PostgreSQL container IP address
+echo -e "${BLUE}Getting PostgreSQL container IP address...${NC}"
+sleep 3  # Give the container a moment to get its network ready
+POSTGRES_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fieldeyes-postgres)
+if [ -z "$POSTGRES_IP" ]; then
+    echo -e "${RED}Could not get PostgreSQL container IP address.${NC}"
+    POSTGRES_IP="fieldeyes-postgres"  # Fallback to container name
+else
+    echo -e "${GREEN}PostgreSQL container IP: ${POSTGRES_IP}${NC}"
+fi
 
 # Wait for PostgreSQL to be ready
 echo -e "${BLUE}Waiting for PostgreSQL to initialize...${NC}"
@@ -51,6 +66,28 @@ if [ $attempt -gt $max_attempts ]; then
     exit 1
 fi
 
+# Verify PostgreSQL connection
+echo -e "${BLUE}Verifying PostgreSQL connection...${NC}"
+if docker exec fieldeyes-postgres psql -U postgres -d field_eyes -c "SELECT 1" &>/dev/null; then
+    echo -e "${GREEN}Successfully connected to PostgreSQL database!${NC}"
+else
+    echo -e "${RED}Failed to connect to PostgreSQL database.${NC}"
+    docker logs fieldeyes-postgres
+    exit 1
+fi
+
+# Update the DSN to use the container name instead of localhost
+# This is important for Docker networking
+echo -e "${BLUE}Setting up environment variables with Docker-specific settings...${NC}"
+export DB_HOST="fieldeyes-postgres"  # Use container name for Docker networking
+export DB_PORT=5432
+export DB_USER=postgres
+export DB_PASSWORD=postgres123456
+export DB_NAME=field_eyes
+export DSN="host=fieldeyes-postgres port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
+export REDIS_HOST="fieldeyes-redis"  # Use container name for Redis too
+
 # Starting the application
-echo -e "${BLUE}Starting Field Eyes API...${NC}"
+echo -e "${BLUE}Starting Field Eyes API with explicit Docker networking...${NC}"
+echo -e "${GREEN}Using DSN: ${DSN}${NC}"
 go run ./cmd/api 
