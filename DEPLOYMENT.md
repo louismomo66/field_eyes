@@ -12,17 +12,26 @@ This guide provides step-by-step instructions on how to deploy the Field Eyes AP
 
 ### 1. Build and Push the Docker Image
 
+First, set your registry URL as an environment variable:
+
 ```bash
-# Build and push the deployment Docker image
+export REGISTRY_URL=your-registry-url
+```
+
+Then build and push the deployment Docker image:
+
+```bash
 make deploy
 ```
 
 Alternatively, you can push the image manually:
 
 ```bash
-docker-compose build api
-docker tag fieldeyes_api:latest your-registry/fieldeyes:latest
-docker push your-registry/fieldeyes:latest
+# Build the cloud image
+docker-compose --profile cloud build api-cloud
+
+# Push the image to your registry
+docker-compose --profile cloud push api-cloud
 ```
 
 ### 2. Configure the Back4App Container Service
@@ -39,6 +48,7 @@ docker push your-registry/fieldeyes:latest
      - DB_USER: (your database username)
      - DB_PASSWORD: (your database password)
      - DB_NAME: (your database name)
+     - DSN: host=(your database host) port=(your database port) user=(your database username) password=(your database password) dbname=(your database name) sslmode=disable
      - JWT_SECRET: (your JWT secret)
    - Health Check Path: /health
 
@@ -70,6 +80,7 @@ If your container fails to start or becomes unhealthy:
 3. Make sure the health check endpoint is working
 4. Ensure that port 9004 is exposed in your Dockerfile and correctly mapped in the container settings
 5. If you see "no such host" errors, ensure your environment variables are properly set
+6. If the database connection fails, check if the database is accessible from the container
 
 ## Additional Configuration
 
