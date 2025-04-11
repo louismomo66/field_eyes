@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -73,18 +71,20 @@ services:
     ports:
       - "9004:9004"
     environment:
-      # Database
+      # Docker configuration
+      - DOCKER_ENV=true
       - PORT=9004
+      # Database configuration
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres123456
       - DB_NAME=field_eyes
-      - DATABASE_URL=postgres://postgres:postgres123456@postgres:5432/field_eyes?sslmode=disable
-      # Redis
+      - DATABASE_URL=host=postgres port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable timezone=UTC connect_timeout=5
+      # Redis configuration
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      # MQTT
+      # MQTT configuration
       - MQTT_BROKER_URL=tcp://mosquitto:1883
       - MQTT_CLIENT_ID=field_eyes_server
       - MQTT_TOPIC_ROOT=field_eyes/devices
@@ -99,6 +99,48 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # Database Admin Tool
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: fieldeyes-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@fieldeyes.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - fieldeyes-network
+      
+  # Redis Admin Tool
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: fieldeyes-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - fieldeyes-network
+      
+  # MQTT Dashboard
+  mqtt-dashboard:
+    image: eclipse-mosquitto:2
+    container_name: fieldeyes-mqtt-dashboard
+    restart: unless-stopped
+    command: sh -c "wget -O /tmp/mqtt-dashboard.js https://raw.githubusercontent.com/hui6075/mqtt-admin-panel/master/index.html && mkdir -p /mosquitto/www && mv /tmp/mqtt-dashboard.js /mosquitto/www/index.html && mosquitto_sub -h mosquitto -t '#' -v"
+    volumes:
+      - ./mqtt-dashboard:/mosquitto/www
+    depends_on:
+      - mosquitto
+    ports:
+      - "9002:9001"
+    networks:
+      - fieldeyes-network
 
 networks:
   fieldeyes-network:

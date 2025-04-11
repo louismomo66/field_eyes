@@ -43,6 +43,16 @@ func NewMQTTClient(app *Config) (*MQTTClient, error) {
 		brokerURL = "tcp://localhost:1883" // Default
 	}
 
+	// In Docker environment, use the service name instead of localhost
+	if os.Getenv("DOCKER_ENV") == "true" && strings.Contains(brokerURL, "localhost") {
+		brokerURL = strings.Replace(brokerURL, "localhost", "mosquitto", 1)
+		app.InfoLog.Printf("Docker environment detected: Using mosquitto service instead of localhost")
+	} else if strings.Contains(brokerURL, "localhost") {
+		// Fix localhost references to use IPv4 instead of IPv6
+		brokerURL = strings.Replace(brokerURL, "localhost", "127.0.0.1", 1)
+		app.InfoLog.Printf("Using IPv4 address for MQTT: %s", brokerURL)
+	}
+
 	username := os.Getenv("MQTT_USERNAME")
 	password := os.Getenv("MQTT_PASSWORD")
 	clientID := os.Getenv("MQTT_CLIENT_ID")
@@ -77,10 +87,33 @@ func NewMQTTClient(app *Config) (*MQTTClient, error) {
 		app.InfoLog.Printf("MQTT client connected to broker at %s", brokerURL)
 	})
 
-	// Create the client
-	client := mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		return nil, fmt.Errorf("failed to connect to MQTT broker: %v", token.Error())
+	// Connect with timeout handling
+	var client mqtt.Client
+	client = mqtt.NewClient(opts)
+
+	// Set appropriate timeout
+	connectTimeout := 10 * time.Second
+
+	// Connect with timeout
+	app.InfoLog.Printf("Connecting to MQTT broker at %s", brokerURL)
+	connectChan := make(chan error, 1)
+	go func() {
+		token := client.Connect()
+		token.Wait()
+		connectChan <- token.Error()
+	}()
+
+	// Wait for connection with timeout
+	var err error
+	select {
+	case err = <-connectChan:
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to MQTT broker: %v", err)
+		}
+		app.InfoLog.Printf("MQTT connection successful")
+	case <-time.After(connectTimeout):
+		app.InfoLog.Printf("MQTT connection timed out after %v, continuing without MQTT", connectTimeout)
+		return nil, fmt.Errorf("MQTT connection timed out")
 	}
 
 	mqttClient := &MQTTClient{

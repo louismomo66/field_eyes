@@ -39,6 +39,7 @@ EXPOSE ${PORT:-9004}
 # Default environment variables
 ENV DEV_MODE=false
 ENV PORT=9004
+ENV DOCKER_ENV=true
 
 # Special environment for Render and other cloud platforms
 ENV CLOUD_ENV=false

@@ -14,7 +14,10 @@ help:
 	@echo "  make docker-services   - Start only PostgreSQL and Redis services"
 	@echo "  make docker-test       - Run tests with the test_deployment.sh script"
 	@echo "  make up                - Start all Docker containers"
-	@echo "  make down              - Stop all Docker containers"
+	@echo "  make down              - Stop and remove all Docker containers"
+	@echo "  make start             - Start existing Docker containers (no recreation, preserves data)"
+	@echo "  make stop              - Stop Docker containers without removing them (preserves data)"
+	@echo "  make local-services    - Start just database services for local development"
 	@echo "  make docker-logs       - View Docker container logs"
 	@echo "  make clean             - Clean up build artifacts"
 	@echo "  make test              - Run tests"
@@ -54,7 +57,7 @@ build:
 .PHONY: run
 run: free-port
 	@echo "Running API locally..."
-	@go run ./cmd/api
+	@DATABASE_URL="host=127.0.0.1 port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable timezone=UTC connect_timeout=5" DB_HOST=127.0.0.1 REDIS_HOST=127.0.0.1 MQTT_BROKER_URL=tcp://127.0.0.1:1883 DOCKER_ENV=false go run ./cmd/api
 
 # Run the API locally with local environment settings
 .PHONY: run-local
@@ -62,7 +65,7 @@ run-local: free-port
 	@echo "Running API locally with local environment..."
 	@cp -f .env .env.backup 2>/dev/null || true
 	@cp -f .env.local .env 2>/dev/null || echo "Warning: .env.local not found, using existing .env"
-	@DEV_MODE=true go run ./cmd/api
+	@DATABASE_URL="host=127.0.0.1 port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable timezone=UTC connect_timeout=5" DEV_MODE=true DB_HOST=127.0.0.1 REDIS_HOST=127.0.0.1 MQTT_BROKER_URL=tcp://127.0.0.1:1883 DOCKER_ENV=false go run ./cmd/api
 	@mv -f .env.backup .env 2>/dev/null || true
 
 # Run the API in cloud environment (like Render) with graceful fallbacks
@@ -208,3 +211,95 @@ status: docker-check
 	@docker volume ls --filter "name=field_eyes*"
 	@echo "\nAPI health status:"
 	@curl -s http://localhost:9004/health 2>/dev/null | grep status || echo "API not running"
+
+# Docker command to run everything in a containerized environment
+.PHONY: docker-full
+docker-full: docker-check
+	@echo "Starting Field Eyes API with Docker (all services)..."
+	@echo "This will start PostgreSQL, Redis, MQTT, and the API..."
+	@docker-compose down --remove-orphans 2>/dev/null || true
+	@docker-compose up -d
+	@echo "Waiting for services to initialize..."
+	@for i in $$(seq 1 30); do \
+		if curl -s http://localhost:9004/health > /dev/null 2>&1; then \
+			echo "API is running successfully!"; \
+			echo ""; \
+			echo "Services available at:"; \
+			echo "  API:              http://localhost:9004"; \
+			echo "  Health check:     http://localhost:9004/health"; \
+			echo "  PostgreSQL:       localhost:5432 (postgres/postgres123456)"; \
+			echo "  Redis:            localhost:6379"; \
+			echo "  MQTT:             localhost:1883"; \
+			echo "  PostgreSQL Admin: http://localhost:5050 (admin@fieldeyes.com/admin)"; \
+			echo "  Redis Admin:      http://localhost:8081"; \
+			echo "  MQTT Dashboard:   http://localhost:9002"; \
+			echo ""; \
+			echo "To stop all services: make docker-stop"; \
+			break; \
+		fi; \
+		echo "Waiting for API to start (attempt $$i/30)..."; \
+		sleep 2; \
+	done
+	@echo "View logs with: docker-compose logs -f api"
+
+# Stop all containers
+.PHONY: docker-stop
+docker-stop: docker-check
+	@echo "Stopping all Docker services..."
+	@docker-compose down
+	@echo "All services stopped."
+
+# Show Docker status and health info
+.PHONY: docker-status
+docker-status: docker-check
+	@echo "Docker container status:"
+	@docker-compose ps
+	@echo ""
+	@echo "API health check:"
+	@curl -s http://localhost:9004/health || echo "API not responding"
+
+# Start containers without recreating them (preserves data)
+.PHONY: start
+start: docker-check
+	@echo "Starting Docker containers without recreation..."
+	@docker-compose start
+	@echo "Containers started. Use 'make status' to check their status."
+	@echo "Waiting for services to become available..."
+	@for i in $$(seq 1 10); do \
+		if curl -s http://localhost:9004/health > /dev/null 2>&1; then \
+			echo "✅ API is now running!"; \
+			break; \
+		fi; \
+		echo "Waiting for API... (attempt $$i/10)"; \
+		sleep 2; \
+	done
+
+# Stop containers without removing them (preserves data)
+.PHONY: stop
+stop: docker-check
+	@echo "Stopping Docker containers without removing them..."
+	@docker-compose stop
+	@echo "Containers stopped. Data is preserved."
+
+# Start only database services locally (PostgreSQL and Redis) for local development
+.PHONY: local-services
+local-services: docker-check
+	@echo "Starting database services (PostgreSQL and Redis) for local development..."
+	@docker-compose up -d postgres redis mosquitto
+	@echo "Waiting for PostgreSQL to initialize..."
+	@for i in $$(seq 1 10); do \
+		if docker exec fieldeyes-postgres pg_isready -U postgres > /dev/null 2>&1; then \
+			echo "PostgreSQL is ready!"; \
+			break; \
+		fi; \
+		echo "Waiting for PostgreSQL to start (attempt $$i/10)..."; \
+		sleep 2; \
+	done
+	@echo ""
+	@echo "✅ Services are running locally at:"
+	@echo "   - PostgreSQL: localhost:5432 (postgres/postgres123456)"
+	@echo "   - Redis:      localhost:6379"
+	@echo "   - MQTT:       localhost:1883"
+	@echo ""
+	@echo "✅ To start the API locally, run:"
+	@echo "   make run"

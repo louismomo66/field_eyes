@@ -1,0 +1,190 @@
+1744338241: mosquitto version 2.0.21 starting
+1744338241: Config loaded from /mosquitto/config/mosquitto.conf.
+1744338241: Opening ipv4 listen socket on port 1883.
+1744338241: Opening ipv6 listen socket on port 1883.
+1744338241: Opening websockets listen socket on port 9001.
+1744338241: mosquitto version 2.0.21 running
+1744338246: mosquitto version 2.0.21 terminating
+1744338246: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1744339385: mosquitto version 2.0.21 starting
+1744339385: Config loaded from /mosquitto/config/mosquitto.conf.
+1744339385: Opening ipv4 listen socket on port 1883.
+1744339385: Opening ipv6 listen socket on port 1883.
+1744339385: Opening websockets listen socket on port 9001.
+1744339385: mosquitto version 2.0.21 running
+1744339395: New connection from 172.18.0.7:49992 on port 1883.
+1744339395: New client connected from 172.18.0.7:49992 as field_eyes_server (p2, c1, k30).
+1744339395: No will message specified.
+1744339395: Sending CONNACK to field_eyes_server (0, 0)
+1744339395: Received SUBSCRIBE from field_eyes_server
+1744339395: 	field_eyes/devices/+/data (QoS 1)
+1744339395: field_eyes_server 1 field_eyes/devices/+/data
+1744339395: Sending SUBACK to field_eyes_server
+1744339395: Received SUBSCRIBE from field_eyes_server
+1744339395: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744339395: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744339395: Sending SUBACK to field_eyes_server
+1744339425: Received PINGREQ from field_eyes_server
+1744339425: Sending PINGRESP to field_eyes_server
+1744339857: mosquitto version 2.0.21 starting
+1744339857: Config loaded from /mosquitto/config/mosquitto.conf.
+1744339857: Opening ipv4 listen socket on port 1883.
+1744339857: Opening ipv6 listen socket on port 1883.
+1744339857: Opening websockets listen socket on port 9001.
+1744339857: mosquitto version 2.0.21 running
+1744339862: New connection from 172.18.0.2:55450 on port 1883.
+1744339862: New client connected from 172.18.0.2:55450 as field_eyes_server (p2, c1, k30).
+1744339862: No will message specified.
+1744339862: Sending CONNACK to field_eyes_server (0, 0)
+1744339862: Received SUBSCRIBE from field_eyes_server
+1744339862: 	field_eyes/devices/+/data (QoS 1)
+1744339862: field_eyes_server 1 field_eyes/devices/+/data
+1744339862: Sending SUBACK to field_eyes_server
+1744339862: Received SUBSCRIBE from field_eyes_server
+1744339862: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744339862: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744339862: Sending SUBACK to field_eyes_server
+1744339925: mosquitto version 2.0.21 starting
+1744339925: Config loaded from /mosquitto/config/mosquitto.conf.
+1744339925: Opening ipv4 listen socket on port 1883.
+1744339925: Opening ipv6 listen socket on port 1883.
+1744339925: Opening websockets listen socket on port 9001.
+1744339925: mosquitto version 2.0.21 running
+1744339930: New connection from 172.18.0.5:37104 on port 1883.
+1744339930: New client connected from 172.18.0.5:37104 as field_eyes_server (p2, c1, k30).
+1744339930: No will message specified.
+1744339930: Sending CONNACK to field_eyes_server (0, 0)
+1744339930: Received SUBSCRIBE from field_eyes_server
+1744339930: 	field_eyes/devices/+/data (QoS 1)
+1744339930: field_eyes_server 1 field_eyes/devices/+/data
+1744339930: Sending SUBACK to field_eyes_server
+1744339930: Received SUBSCRIBE from field_eyes_server
+1744339930: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744339930: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744339930: Sending SUBACK to field_eyes_server
+1744339960: Received PINGREQ from field_eyes_server
+1744339960: Sending PINGRESP to field_eyes_server
+1744339995: Received PINGREQ from field_eyes_server
+1744339995: Sending PINGRESP to field_eyes_server
+1744340030: Received PINGREQ from field_eyes_server
+1744340030: Sending PINGRESP to field_eyes_server
+1744340055: Received DISCONNECT from field_eyes_server
+1744340055: Client field_eyes_server disconnected.
+1744340055: mosquitto version 2.0.21 terminating
+1744340055: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1744340056: mosquitto version 2.0.21 starting
+1744340056: Config loaded from /mosquitto/config/mosquitto.conf.
+1744340056: Opening ipv4 listen socket on port 1883.
+1744340056: Opening ipv6 listen socket on port 1883.
+1744340056: Opening websockets listen socket on port 9001.
+1744340056: mosquitto version 2.0.21 running
+1744340061: New connection from 172.18.0.5:52106 on port 1883.
+1744340061: New client connected from 172.18.0.5:52106 as field_eyes_server (p2, c1, k30).
+1744340061: No will message specified.
+1744340061: Sending CONNACK to field_eyes_server (0, 0)
+1744340061: Received SUBSCRIBE from field_eyes_server
+1744340061: 	field_eyes/devices/+/data (QoS 1)
+1744340061: field_eyes_server 1 field_eyes/devices/+/data
+1744340061: Sending SUBACK to field_eyes_server
+1744340061: Received SUBSCRIBE from field_eyes_server
+1744340061: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744340061: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744340061: Sending SUBACK to field_eyes_server
+1744340091: Received PINGREQ from field_eyes_server
+1744340091: Sending PINGRESP to field_eyes_server
+1744340126: Received PINGREQ from field_eyes_server
+1744340126: Sending PINGRESP to field_eyes_server
+1744340148: Received DISCONNECT from field_eyes_server
+1744340148: Client field_eyes_server disconnected.
+1744340148: mosquitto version 2.0.21 terminating
+1744340148: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1744340150: mosquitto version 2.0.21 starting
+1744340150: Config loaded from /mosquitto/config/mosquitto.conf.
+1744340150: Opening ipv4 listen socket on port 1883.
+1744340150: Opening ipv6 listen socket on port 1883.
+1744340150: Opening websockets listen socket on port 9001.
+1744340150: mosquitto version 2.0.21 running
+1744340161: New connection from 172.18.0.7:45946 on port 1883.
+1744340161: New client connected from 172.18.0.7:45946 as field_eyes_server (p2, c1, k30).
+1744340161: No will message specified.
+1744340161: Sending CONNACK to field_eyes_server (0, 0)
+1744340161: Received SUBSCRIBE from field_eyes_server
+1744340161: 	field_eyes/devices/+/data (QoS 1)
+1744340161: field_eyes_server 1 field_eyes/devices/+/data
+1744340161: Sending SUBACK to field_eyes_server
+1744340161: Received SUBSCRIBE from field_eyes_server
+1744340161: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744340161: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744340161: Sending SUBACK to field_eyes_server
+1744340191: Received PINGREQ from field_eyes_server
+1744340191: Sending PINGRESP to field_eyes_server
+1744340226: Received PINGREQ from field_eyes_server
+1744340226: Sending PINGRESP to field_eyes_server
+1744340484: mosquitto version 2.0.21 starting
+1744340484: Config loaded from /mosquitto/config/mosquitto.conf.
+1744340484: Opening ipv4 listen socket on port 1883.
+1744340484: Opening ipv6 listen socket on port 1883.
+1744340484: Opening websockets listen socket on port 9001.
+1744340484: mosquitto version 2.0.21 running
+1744340489: New connection from 172.18.0.4:53050 on port 1883.
+1744340489: New client connected from 172.18.0.4:53050 as field_eyes_server (p2, c1, k30).
+1744340489: No will message specified.
+1744340489: Sending CONNACK to field_eyes_server (0, 0)
+1744340489: Received SUBSCRIBE from field_eyes_server
+1744340489: 	field_eyes/devices/+/data (QoS 1)
+1744340489: field_eyes_server 1 field_eyes/devices/+/data
+1744340489: Sending SUBACK to field_eyes_server
+1744340489: Received SUBSCRIBE from field_eyes_server
+1744340489: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744340489: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744340489: Sending SUBACK to field_eyes_server
+1744340502: Received DISCONNECT from field_eyes_server
+1744340502: Client field_eyes_server disconnected.
+1744340503: New connection from 172.18.0.7:33716 on port 1883.
+1744340503: New client connected from 172.18.0.7:33716 as field_eyes_server (p2, c1, k30).
+1744340503: No will message specified.
+1744340503: Sending CONNACK to field_eyes_server (0, 0)
+1744340503: Received SUBSCRIBE from field_eyes_server
+1744340503: 	field_eyes/devices/+/data (QoS 1)
+1744340503: field_eyes_server 1 field_eyes/devices/+/data
+1744340503: Sending SUBACK to field_eyes_server
+1744340503: Received SUBSCRIBE from field_eyes_server
+1744340503: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744340503: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744340503: Sending SUBACK to field_eyes_server
+1744340654: mosquitto version 2.0.21 starting
+1744340654: Config loaded from /mosquitto/config/mosquitto.conf.
+1744340654: Opening ipv4 listen socket on port 1883.
+1744340654: Opening ipv6 listen socket on port 1883.
+1744340654: Opening websockets listen socket on port 9001.
+1744340654: mosquitto version 2.0.21 running
+1744340659: New connection from 172.18.0.4:56374 on port 1883.
+1744340659: New client connected from 172.18.0.4:56374 as field_eyes_server (p2, c1, k30).
+1744340659: No will message specified.
+1744340659: Sending CONNACK to field_eyes_server (0, 0)
+1744340659: Received SUBSCRIBE from field_eyes_server
+1744340659: 	field_eyes/devices/+/data (QoS 1)
+1744340659: field_eyes_server 1 field_eyes/devices/+/data
+1744340659: Sending SUBACK to field_eyes_server
+1744340659: Received SUBSCRIBE from field_eyes_server
+1744340659: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744340659: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744340659: Sending SUBACK to field_eyes_server
+1744340765: mosquitto version 2.0.21 starting
+1744340765: Config loaded from /mosquitto/config/mosquitto.conf.
+1744340765: Opening ipv4 listen socket on port 1883.
+1744340765: Opening ipv6 listen socket on port 1883.
+1744340765: Opening websockets listen socket on port 9001.
+1744340765: mosquitto version 2.0.21 running
+1744340770: New connection from 172.18.0.2:34810 on port 1883.
+1744340770: New client connected from 172.18.0.2:34810 as field_eyes_server (p2, c1, k30).
+1744340770: No will message specified.
+1744340770: Sending CONNACK to field_eyes_server (0, 0)
+1744340770: Received SUBSCRIBE from field_eyes_server
+1744340770: 	field_eyes/devices/+/data (QoS 1)
+1744340770: field_eyes_server 1 field_eyes/devices/+/data
+1744340770: Sending SUBACK to field_eyes_server
+1744340770: Received SUBSCRIBE from field_eyes_server
+1744340770: 	field_eyes/devices/+/chunked/# (QoS 1)
+1744340770: field_eyes_server 1 field_eyes/devices/+/chunked/#
+1744340770: Sending SUBACK to field_eyes_server

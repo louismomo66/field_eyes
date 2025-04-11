@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"field_eyes/data"
 	"fmt"
@@ -549,10 +548,12 @@ func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	var redisStatus string
 	var redisDetails string
 	if app.Redis != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
+		// Get a connection from the pool
+		conn := app.Redis.Pool.Get()
+		defer conn.Close()
 
-		_, err := app.Redis.Client.Ping(ctx).Result()
+		// Execute PING command
+		_, err := conn.Do("PING")
 		if err != nil {
 			redisStatus = "disconnected"
 			redisDetails = err.Error()
