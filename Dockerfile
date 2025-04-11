@@ -1,4 +1,4 @@
-FROM golang:1.24.1
+FROM golang:1.24.1 AS builder
 
 WORKDIR /app
 
@@ -8,25 +8,40 @@ COPY go.mod go.sum ./
 # Download all dependencies
 RUN go mod download
 
-# Copy the local package files to the container's workspace
+# Copy the source code
 COPY . .
 
-# Install required packages
-RUN apt-get update && apt-get install -y wget ca-certificates iputils-ping dnsutils netcat-openbsd
-
 # Build the application
-RUN go build -o field_eyes_api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o field_eyes_api ./cmd/api
 
-# Expose port
+# Create a minimal production image
+FROM alpine:latest
+
+# Install CA certificates for HTTPS and other tools
+RUN apk --no-cache add ca-certificates tzdata curl netcat-openbsd
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the binary from the builder stage
+COPY --from=builder /app/field_eyes_api .
+
+# Create necessary directories
+RUN mkdir -p /app/templates
+
+# Add a simple healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:9004/health || exit 1
+
+# Expose the application port
 EXPOSE 9004
 
-# Set default environment variables using DATABASE_URL
-ENV DATABASE_URL=postgres://postgres:postgres123456@fieldeyes-db:5432/field_eyes?sslmode=disable
-ENV JWT_SECRET=fieldeystuliSmartbalimi
-ENV DEV_MODE=false
+# Environment variables documentation
+# DATABASE_URL: postgres://username:password@hostname:port/database?sslmode=disable
+# REDIS_HOST: Redis hostname (e.g., localhost or redis service name)
+# REDIS_PORT: Redis port (default: 6379)
+# PORT: Application port (default: 9004)
+# JWT_SECRET: Secret for JWT token generation
 
 # Command to run the executable
-CMD ["./field_eyes_api"]
-
-# Remove Git lock file
-RUN rm -f .git/index.lock 
+CMD ["./field_eyes_api"] 

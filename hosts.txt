@@ -1,5 +1,0 @@
-127.0.0.1 localhost
-::1 localhost ip6-localhost ip6-loopback
-172.28.1.2 fieldeyes-db db
-172.28.1.4 fieldeyes-app app
-172.28.1.5 fieldeyes-debug debug 

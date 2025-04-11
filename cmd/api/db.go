@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -12,34 +14,77 @@ func (app *Config) initDB() *sql.DB {
 	// Check for development mode
 	devMode := os.Getenv("DEV_MODE")
 	if devMode == "true" {
-		log.Println("⚠️ Running in DEVELOPMENT MODE without database ⚠️")
+		app.InfoLog.Println("⚠️ Running in DEVELOPMENT MODE without database ⚠️")
 		return nil
 	}
 
 	// Get database URL from environment
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Println("⚠️ DATABASE_URL not set, database features will not work ⚠️")
-		return nil
+		// Try to construct from individual variables if DATABASE_URL is not set
+		dbHost := os.Getenv("DB_HOST")
+		dbPort := os.Getenv("DB_PORT")
+		dbUser := os.Getenv("DB_USER")
+		dbPass := os.Getenv("DB_PASSWORD")
+		dbName := os.Getenv("DB_NAME")
+
+		if dbHost != "" && dbUser != "" && dbName != "" {
+			if dbPort == "" {
+				dbPort = "5432" // Default PostgreSQL port
+			}
+			dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+				dbUser, dbPass, dbHost, dbPort, dbName)
+			app.InfoLog.Printf("Constructed DATABASE_URL from individual parameters")
+		} else {
+			app.ErrorLog.Println("⚠️ Neither DATABASE_URL nor individual DB_* variables are set, database features will not work ⚠️")
+			return nil
+		}
 	}
 
-	// Connect to the database
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Printf("⚠️ Failed to connect to database: %v ⚠️", err)
-		return nil
+	// Connect to database with retries
+	var db *sql.DB
+	var err error
+	maxRetries := 5
+	retryDelay := 5 * time.Second
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		app.InfoLog.Printf("Connecting to database (attempt %d/%d)...", attempt, maxRetries)
+
+		// Try different hostnames if connection fails (for Docker/cloud environments)
+		currentURL := dbURL
+		if attempt > 1 && strings.Contains(dbURL, "localhost") {
+			// On retry, try with docker container name if using localhost
+			currentURL = strings.Replace(dbURL, "localhost", "postgres", 1)
+			app.InfoLog.Printf("Retrying with alternate hostname: postgres")
+		} else if attempt > 2 && strings.Contains(dbURL, "localhost") {
+			// Try with host.docker.internal on third attempt
+			currentURL = strings.Replace(dbURL, "localhost", "host.docker.internal", 1)
+			app.InfoLog.Printf("Retrying with alternate hostname: host.docker.internal")
+		}
+
+		db, err = sql.Open("postgres", currentURL)
+		if err == nil {
+			// Test the connection
+			err = db.Ping()
+			if err == nil {
+				// Configure connection pool
+				db.SetMaxIdleConns(10)
+				db.SetMaxOpenConns(100)
+				db.SetConnMaxLifetime(time.Hour)
+
+				app.InfoLog.Println("✅ Database connected successfully")
+				return db
+			}
+			app.ErrorLog.Printf("Database ping failed: %v", err)
+		} else {
+			app.ErrorLog.Printf("Database connection failed: %v", err)
+		}
+
+		// Log the error and retry after delay
+		app.InfoLog.Printf("Retrying in %v...", retryDelay)
+		time.Sleep(retryDelay)
 	}
 
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		log.Printf("⚠️ Failed to ping database: %v ⚠️", err)
-		return nil
-	}
-
-	// Configure connection pool
-	db.SetMaxIdleConns(10)
-	db.SetMaxOpenConns(100)
-
-	log.Println("Database connected successfully")
-	return db
+	app.ErrorLog.Printf("⚠️ Failed to connect to database after %d attempts ⚠️", maxRetries)
+	return nil
 }

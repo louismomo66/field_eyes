@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"field_eyes/data"
 	"field_eyes/pkg/email"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -23,23 +27,48 @@ func (app *Config) serve() {
 		port = webPort // Default to webPort constant
 	}
 
+	// Create a new server
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", port),
-		Handler: app.routes(),
+		Addr:         fmt.Sprintf(":%s", port),
+		Handler:      app.routes(),
+		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
-	app.InfoLog.Printf("Starting web server on port %s...", port)
+	// Start the server in a goroutine
+	go func() {
+		app.InfoLog.Printf("Starting web server on port %s (listening on all interfaces)...", port)
 
-	err := srv.ListenAndServe()
-	if err != nil {
-		if strings.Contains(err.Error(), "address already in use") {
-			app.ErrorLog.Printf("Port %s is already in use. Try setting a different PORT in your environment variables.", port)
-			os.Exit(1)
-		} else {
-			app.ErrorLog.Printf("Failed to start server: %v", err)
-			os.Exit(1)
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			if strings.Contains(err.Error(), "address already in use") {
+				app.ErrorLog.Printf("Port %s is already in use. Try setting a different PORT in your environment variables.", port)
+			} else {
+				app.ErrorLog.Printf("Failed to start server: %v", err)
+			}
+			app.ErrorChan <- err
 		}
+	}()
+
+	// Create a channel to listen for OS signals
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until we receive a signal
+	<-quit
+	app.InfoLog.Println("Shutting down server...")
+
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Attempt graceful shutdown
+	if err := srv.Shutdown(ctx); err != nil {
+		app.ErrorLog.Printf("Server forced to shutdown: %v", err)
 	}
+
+	app.InfoLog.Println("Server exited properly")
 }
 
 // loadEnvFile loads the environment variables from .env file
@@ -80,6 +109,26 @@ func loadEnvFile() bool {
 	return false
 }
 
+// Wait for background processes to finish with a timeout
+func (app *Config) waitForBackgroundProcesses(timeout time.Duration) {
+	// Create a channel for the wait group
+	done := make(chan struct{})
+
+	// Wait for the wait group in a goroutine
+	go func() {
+		app.Wait.Wait()
+		close(done)
+	}()
+
+	// Wait with timeout
+	select {
+	case <-done:
+		app.InfoLog.Println("All background processes completed successfully")
+	case <-time.After(timeout):
+		app.InfoLog.Println("Timed out waiting for background processes to complete")
+	}
+}
+
 func main() {
 	// Load environment variables from .env file
 	envLoaded := loadEnvFile()
@@ -97,7 +146,7 @@ func main() {
 		log.Println("JWT_SECRET environment variable loaded successfully")
 	}
 
-	//setup loggs
+	//setup logs
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
 	errorLog := log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 	app := Config{
@@ -115,12 +164,14 @@ func main() {
 		app.InfoLog.Println("Using system environment variables (no .env file loaded)")
 	}
 
+	// Print key configuration values
+	app.InfoLog.Printf("Using PORT=%s", os.Getenv("PORT"))
+	app.InfoLog.Printf("Using DB_HOST=%s", os.Getenv("DB_HOST"))
+	app.InfoLog.Printf("Using REDIS_HOST=%s", os.Getenv("REDIS_HOST"))
+
 	// Initialize the mailer
 	// In production, use SMTPMailer
 	app.Mailer = email.NewSMTPMailer()
-
-	// For development/testing, use MockMailer
-	// app.Mailer = &email.MockMailer{}
 
 	// Initialize Redis client
 	redisClient, err := NewRedisClient()
@@ -143,7 +194,17 @@ func main() {
 	db := app.initDB()
 	app.DB = db
 
-	// Initialize data models - using simplified version
+	// Close database connection when app exits
+	if db != nil {
+		defer func() {
+			app.InfoLog.Println("Closing database connection...")
+			if err := db.Close(); err != nil {
+				app.ErrorLog.Printf("Error closing database connection: %v", err)
+			}
+		}()
+	}
+
+	// Initialize data models
 	app.Models = data.New(db)
 
 	// Initialize MQTT client
@@ -166,6 +227,17 @@ func main() {
 		defer mqttClient.CloseConnection()
 	}
 
+	// Start error listener
 	go app.listenForErrors()
+
+	// Start the server
 	app.serve()
+
+	// Wait for background processes to complete with a timeout
+	app.waitForBackgroundProcesses(10 * time.Second)
+
+	// Signal the error listener to exit
+	app.ErrorChanDone <- true
+
+	app.InfoLog.Println("Application shutdown complete")
 }

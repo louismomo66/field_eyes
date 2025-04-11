@@ -4,91 +4,161 @@
 .PHONY: help
 help:
 	@echo "Available commands:"
-	@echo "  make build         - Build the API binary"
-	@echo "  make run           - Run the API locally"
-	@echo "  make run-local     - Run the API locally with local environment"
-	@echo "  make docker-build  - Build the Docker image"
-	@echo "  make up            - Start all Docker containers"
-	@echo "  make down          - Stop all Docker containers"
-	@echo "  make docker-logs   - View Docker container logs"
-	@echo "  make clean         - Clean up build artifacts"
-	@echo "  make test          - Run tests"
-	@echo "  make migrate       - Run database migrations"
-	@echo "  make deploy        - Build and deploy to cloud platform"
+	@echo "  make build             - Build the API binary"
+	@echo "  make run               - Run the API locally"
+	@echo "  make run-local         - Run the API locally with local environment"
+	@echo "  make docker-build      - Build the Docker image"
+	@echo "  make docker-run        - Build and run the API in Docker with all services"
+	@echo "  make docker-run-api    - Run only the API container (assumes services are running)"
+	@echo "  make docker-services   - Start only PostgreSQL and Redis services"
+	@echo "  make docker-test       - Run tests with the test_deployment.sh script"
+	@echo "  make up                - Start all Docker containers"
+	@echo "  make down              - Stop all Docker containers"
+	@echo "  make docker-logs       - View Docker container logs"
+	@echo "  make clean             - Clean up build artifacts"
+	@echo "  make test              - Run tests"
+	@echo "  make migrate           - Run database migrations"
+	@echo "  make status            - Show status of Docker containers"
+	@echo "  make deploy            - Build and deploy to cloud platform"
 
-# Build the API binary to the correct location expected by Docker
+# Check if Docker is running
+docker-check:
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "Error: Docker is not running. Please start Docker Desktop first."; \
+		exit 1; \
+	fi
+
+# Free port 9004 if it's in use
+free-port:
+	@if lsof -i :9004 -t > /dev/null 2>&1; then \
+		echo "Port 9004 is in use. Killing processes..."; \
+		for pid in $$(lsof -i :9004 -t); do \
+			echo "Killing process $$pid"; \
+			kill -9 $$pid; \
+		done; \
+		echo "Port 9004 is now free"; \
+	else \
+		echo "Port 9004 is available"; \
+	fi
+
+# Build the API binary with proper optimization
 .PHONY: build
 build:
-	@echo "Building API binary..."
-	mkdir -p ./app
-	go build -o ./app/field_eyes_api ./cmd/api
+	@echo "Building optimized API binary..."
+	@mkdir -p ./app
+	@go build -ldflags="-s -w" -o ./app/field_eyes_api ./cmd/api
 	@echo "Binary built at ./app/field_eyes_api"
 
 # Run the API locally
 .PHONY: run
-run:
+run: free-port
 	@echo "Running API locally..."
 	@go run ./cmd/api
 
 # Run the API locally with local environment settings
 .PHONY: run-local
-run-local:
-	@echo "Running API locally with .env.local..."
-	@cp .env.local .env
+run-local: free-port
+	@echo "Running API locally with local environment..."
+	@cp -f .env .env.backup 2>/dev/null || true
+	@cp -f .env.local .env 2>/dev/null || echo "Warning: .env.local not found, using existing .env"
 	@DEV_MODE=true go run ./cmd/api
+	@mv -f .env.backup .env 2>/dev/null || true
 
 # Build Docker image for development
 .PHONY: docker-build
-docker-build:
+docker-build: docker-check
 	@echo "Building Docker image..."
-	docker-compose build
+	@docker-compose build
 
-# Build Docker image for cloud deployment
-.PHONY: docker-build-cloud
-docker-build-cloud:
-	@echo "Building Docker image for cloud deployment..."
-	docker-compose --profile cloud build api-cloud
+# Run a comprehensive test using the test script
+.PHONY: docker-test
+docker-test: docker-check
+	@echo "Running deployment test..."
+	@chmod +x ./test_deployment.sh
+	@./test_deployment.sh
+
+# Start only database services (PostgreSQL and Redis)
+.PHONY: docker-services
+docker-services: docker-check
+	@echo "Starting database services (PostgreSQL and Redis)..."
+	@docker-compose up -d postgres redis
+	@echo "Waiting for PostgreSQL to initialize..."
+	@for i in $$(seq 1 10); do \
+		if docker exec fieldeyes-postgres pg_isready -U postgres > /dev/null 2>&1; then \
+			echo "PostgreSQL is ready!"; \
+			break; \
+		fi; \
+		echo "Waiting for PostgreSQL to start (attempt $$i/10)..."; \
+		sleep 2; \
+	done
+	@echo "Services are running! PostgreSQL at localhost:5432, Redis at localhost:6379"
+
+# Run only the API container, connecting to existing services
+.PHONY: docker-run-api
+docker-run-api: docker-check docker-build
+	@echo "Starting API container connecting to existing services..."
+	@docker-compose up -d api
+	@echo "API is running at http://localhost:9004"
+	@echo "Check health at http://localhost:9004/health"
+
+# Build and run everything in Docker
+.PHONY: docker-run
+docker-run: docker-check down
+	@echo "Starting full application stack with Docker..."
+	@docker-compose up -d
+	@echo "Waiting for API to start..."
+	@for i in $$(seq 1 15); do \
+		if curl -s http://localhost:9004/health > /dev/null 2>&1; then \
+			echo "API is running successfully!"; \
+			echo "API available at: http://localhost:9004"; \
+			echo "Health check endpoint: http://localhost:9004/health"; \
+			break; \
+		fi; \
+		echo "Waiting for API to start (attempt $$i/15)..."; \
+		sleep 2; \
+	done
 
 # Start all Docker containers for development
 .PHONY: up
-up: docker-build docker-up
+up: docker-check docker-build
+	@echo "Starting Docker services..."
+	@docker-compose up -d
 	@echo "Docker services started!"
 
 # Stop all Docker containers
 .PHONY: down
-down: docker-down
+down: docker-check
+	@echo "Stopping Docker services..."
+	@docker-compose down
 	@echo "Docker services stopped!"
 
 # View Docker container logs
 .PHONY: docker-logs
-docker-logs:
+docker-logs: docker-check
 	@echo "Viewing Docker logs..."
-	docker-compose logs -f
+	@docker-compose logs -f
 
-# Clean up build artifacts
+# Clean up build artifacts and Docker resources
 .PHONY: clean
 clean:
 	@echo "Cleaning up build artifacts..."
-	rm -rf ./bin
-	rm -rf ./app
-	go clean
+	@rm -rf ./bin ./app
+	@go clean
+	@echo "Cleaning up Docker resources..."
+	@docker-compose down --volumes --remove-orphans 2>/dev/null || true
+	@docker network prune -f 2>/dev/null || true
 
 # Run tests
 .PHONY: test
 test:
 	@echo "Running tests..."
-	go test -v ./...
-
-# Kill processes on port 9004
-kill:
-	@echo "Killing processes on port 9004..."
-	@./kill_processes.sh
+	@go test -v ./...
 
 # Database migrations
 .PHONY: migrate
 migrate:
 	@echo "Running database migrations..."
-	go run ./cmd/api/migrate.go
+	@go run ./cmd/api/migrate.go
 
 # Deploy to cloud platform
 .PHONY: deploy
@@ -96,68 +166,22 @@ deploy: docker-build-cloud
 	@echo "Deploying to cloud platform..."
 	@echo "Make sure you are logged in to the cloud platform's CLI"
 	@echo "Set REGISTRY_URL environment variable to your registry URL"
-	docker-compose --profile cloud push api-cloud
+	@docker-compose --profile cloud push api-cloud
 
-# All-in-one command to start development environment
-.PHONY: dev
-dev: build docker-build up
-	@echo "Development environment is up and running!"
-
-# All-in-one command to stop development environment
-.PHONY: dev-stop
-dev-stop: down
-	@echo "Development environment stopped!"
-
-# Docker compose commands
-docker-up:
-	@echo "Starting Docker services..."
-	docker-compose up -d
-
-docker-down:
-	@echo "Stopping Docker services..."
-	docker-compose down
-
-# New targets
-.PHONY: build up down clean logs debug
-
-# Build the Docker images
-build:
-	@echo "Building Docker image..."
-	docker-compose build
-
-# Start the Docker services
-up: build
-	@echo "Starting Docker services..."
-	docker-compose up -d
-
-# Stop the Docker services
-down:
-	@echo "Stopping Docker services..."
-	docker-compose down
-
-# Stop and remove all Docker resources
-clean:
-	@echo "Cleaning up all Docker resources..."
-	docker-compose down --volumes --remove-orphans
-	docker network prune -f
-
-# Show logs from the app container
-logs:
-	docker-compose logs -f app
-
-# Run the debug container
-debug:
-	docker-compose run --rm debug
-
-# Run the database setup
-db-init:
-	docker-compose exec db psql -U postgres -c "CREATE DATABASE field_eyes WITH OWNER postgres ENCODING 'UTF8';"
+# Build Docker image for cloud deployment
+.PHONY: docker-build-cloud
+docker-build-cloud: docker-check
+	@echo "Building Docker image for cloud deployment..."
+	@docker-compose --profile cloud build api-cloud
 
 # Show Docker status
-status:
+.PHONY: status
+status: docker-check
 	@echo "Docker containers:"
 	@docker ps -a --filter "name=fieldeyes*"
 	@echo "\nDocker networks:"
-	@docker network ls --filter "name=field_eyes*"
+	@docker network ls --filter "name=fieldeyes*"
 	@echo "\nDocker volumes:"
 	@docker volume ls --filter "name=field_eyes*"
+	@echo "\nAPI health status:"
+	@curl -s http://localhost:9004/health 2>/dev/null | grep status || echo "API not running"

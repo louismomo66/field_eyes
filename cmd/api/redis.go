@@ -71,30 +71,72 @@ func NewRedisClient() (*RedisClient, error) {
 
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 
-	redisDB := os.Getenv("REDIS_DB")
-	db := 0
-	if redisDB != "" {
-		var err error
-		db, err = strconv.Atoi(redisDB)
+	// Check if we have REDIS_URL instead (for cloud providers like Render)
+	redisURL := os.Getenv("REDIS_URL")
+	var options *redis.Options
+
+	if redisURL != "" {
+		// Parse the Redis URL
+		parsedOptions, err := redis.ParseURL(redisURL)
 		if err != nil {
-			db = 0
+			return nil, fmt.Errorf("failed to parse REDIS_URL: %w", err)
+		}
+		options = parsedOptions
+	} else {
+		// Use individual parameters
+		redisDB := os.Getenv("REDIS_DB")
+		db := 0
+		if redisDB != "" {
+			var err error
+			db, err = strconv.Atoi(redisDB)
+			if err != nil {
+				db = 0
+			}
+		}
+
+		addr := fmt.Sprintf("%s:%s", redisHost, redisPort)
+		options = &redis.Options{
+			Addr:     addr,
+			Password: redisPassword,
+			DB:       db,
+			// Add connection pooling
+			PoolSize:     10,
+			MinIdleConns: 3,
+			// Add timeouts
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+			// Add retry logic
+			MaxRetries:      3,
+			MinRetryBackoff: 100 * time.Millisecond,
+			MaxRetryBackoff: 1 * time.Second,
 		}
 	}
 
-	addr := fmt.Sprintf("%s:%s", redisHost, redisPort)
-	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: redisPassword,
-		DB:       db,
-	})
+	// Create the client
+	client := redis.NewClient(options)
 
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// Test connection with retry
+	var err error
+	maxRetries := 3
 
-	_, err := client.Ping(ctx).Result()
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err = client.Ping(ctx).Result()
+		cancel()
+
+		if err == nil {
+			break // Successful connection
+		}
+
+		if attempt < maxRetries {
+			fmt.Printf("Redis connection attempt %d failed: %v. Retrying in 2 seconds...\n", attempt, err)
+			time.Sleep(2 * time.Second)
+		}
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to redis: %w", err)
+		return nil, fmt.Errorf("failed to connect to redis after %d attempts: %w", maxRetries, err)
 	}
 
 	return &RedisClient{Client: client}, nil

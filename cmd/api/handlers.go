@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"field_eyes/data"
 	"fmt"
@@ -512,32 +513,75 @@ func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	app.InfoLog.Printf("Web server is configured to listen on port %s", webPort)
 
 	// Log environment variables for debugging
-	app.InfoLog.Printf("Environment: DB_HOST=%s", os.Getenv("DB_HOST"))
-	app.InfoLog.Printf("Environment: DB_PORT=%s", os.Getenv("DB_PORT"))
-	app.InfoLog.Printf("Environment: Using DSN=%s", os.Getenv("DSN"))
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dsn := os.Getenv("DSN")
+	redisHost := os.Getenv("REDIS_HOST")
+	redisPort := os.Getenv("REDIS_PORT")
+
+	app.InfoLog.Printf("Environment: DB_HOST=%s", dbHost)
+	app.InfoLog.Printf("Environment: DB_PORT=%s", dbPort)
+	app.InfoLog.Printf("Environment: Using DSN=%s", dsn)
+	app.InfoLog.Printf("Environment: REDIS_HOST=%s", redisHost)
+	app.InfoLog.Printf("Environment: REDIS_PORT=%s", redisPort)
 
 	// Check database connection if available
 	var dbStatus string
+	var dbDetails string
 	if app.DB != nil {
 		err := app.DB.Ping()
 		if err != nil {
 			dbStatus = "disconnected"
+			dbDetails = err.Error()
 			app.ErrorLog.Printf("Database ping failed: %v", err)
 		} else {
 			dbStatus = "connected"
+			dbDetails = fmt.Sprintf("Connected to PostgreSQL at %s:%s", dbHost, dbPort)
 			app.InfoLog.Printf("Database ping successful")
 		}
 	} else {
 		dbStatus = "not configured"
+		dbDetails = "Database connection not initialized"
 		app.ErrorLog.Printf("Database not configured")
 	}
 
+	// Check Redis connection if available
+	var redisStatus string
+	var redisDetails string
+	if app.Redis != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_, err := app.Redis.Client.Ping(ctx).Result()
+		if err != nil {
+			redisStatus = "disconnected"
+			redisDetails = err.Error()
+			app.ErrorLog.Printf("Redis ping failed: %v", err)
+		} else {
+			redisStatus = "connected"
+			redisDetails = fmt.Sprintf("Connected to Redis at %s:%s", redisHost, redisPort)
+			app.InfoLog.Printf("Redis ping successful")
+		}
+	} else {
+		redisStatus = "not configured"
+		redisDetails = "Redis connection not initialized"
+		app.ErrorLog.Printf("Redis not configured")
+	}
+
+	// Get hostname for debugging
+	hostname, _ := os.Hostname()
+
 	// Send response
-	app.writeJSON(w, http.StatusOK, map[string]string{
-		"status":    "ok",
-		"service":   "field_eyes_api",
-		"timestamp": time.Now().Format(time.RFC3339),
-		"db_status": dbStatus,
-		"port":      webPort,
+	app.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":        "ok",
+		"service":       "field_eyes_api",
+		"timestamp":     time.Now().Format(time.RFC3339),
+		"db_status":     dbStatus,
+		"db_details":    dbDetails,
+		"redis_status":  redisStatus,
+		"redis_details": redisDetails,
+		"port":          webPort,
+		"hostname":      hostname,
+		"version":       "1.0.0",
 	})
 }

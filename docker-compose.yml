@@ -1,17 +1,11 @@
-services:
-  # Network initialization service
-  init-network:
-    image: busybox
-    container_name: init-network
-    command: >
-      sh -c "ping -c 1 172.28.1.2 || true"
-    networks:
-      fieldeyes-network:
-        ipv4_address: 172.28.1.10
+version: '3.8'
 
-  db:
+services:
+  # PostgreSQL Database
+  postgres:
     image: postgres:15
-    container_name: fieldeyes-db
+    container_name: fieldeyes-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123456
@@ -19,66 +13,97 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      fieldeyes-network:
-        ipv4_address: 172.28.1.2
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - fieldeyes-network
 
-  app:
-    build: .
-    container_name: fieldeyes-app
+  # Redis Cache
+  redis:
+    image: redis:7
+    container_name: fieldeyes-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fieldeyes-network
+
+  # Mosquitto MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: fieldeyes-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"  # MQTT
+      - "9001:9001"  # WebSockets
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - fieldeyes-network
+
+  # Field Eyes API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fieldeyes-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
     ports:
       - "9004:9004"
-    depends_on:
-      - init-network
-      - db
-    env_file:
-      - .env
+    environment:
+      # Database
+      - PORT=9004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123456
+      - DB_NAME=field_eyes
+      - DATABASE_URL=postgres://postgres:postgres123456@postgres:5432/field_eyes?sslmode=disable
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # MQTT
+      - MQTT_BROKER_URL=tcp://mosquitto:1883
+      - MQTT_CLIENT_ID=field_eyes_server
+      - MQTT_TOPIC_ROOT=field_eyes/devices
+      # JWT and other settings
+      - JWT_SECRET=fieldeystuliSmartbalimi
+      - DEV_MODE=false
     networks:
-      fieldeyes-network:
-        ipv4_address: 172.28.1.4
-    volumes:
-      - ./debug-network.sh:/app/debug-network.sh
-      - ./hosts.txt:/etc/hosts
-    command: >
-      bash -c "chmod +x /app/debug-network.sh && ./field_eyes_api"
-    extra_hosts:
-      - "fieldeyes-db:172.28.1.2"
-      - "db:172.28.1.2"
-
-  debug:
-    build: .
-    container_name: fieldeyes-debug
-    depends_on:
-      - init-network
-      - db
-    env_file:
-      - .env
-    networks:
-      fieldeyes-network:
-        ipv4_address: 172.28.1.5
-    volumes:
-      - ./debug-network.sh:/app/debug-network.sh
-      - ./hosts.txt:/etc/hosts
-    command: >
-      bash -c "chmod +x /app/debug-network.sh && /app/debug-network.sh"
-    extra_hosts:
-      - "fieldeyes-db:172.28.1.2"
-      - "db:172.28.1.2"
+      - fieldeyes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 networks:
   fieldeyes-network:
     driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.28.0.0/16
-          gateway: 172.28.0.1
 
 volumes:
-  pgdata: 
+  postgres_data:
+  redis_data: 
