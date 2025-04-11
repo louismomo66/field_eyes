@@ -4,12 +4,14 @@ services:
     ports:
       - "9004:9004"
     environment:
-      - DB_HOST=localhost
-      - DB_PORT=5432
+      - DB_HOST=postgres
+      - DB_PORT=5434
       - DB_USER=postgres
       - DB_PASSWORD=postgres123456
       - DB_NAME=field_eyes
-      - DSN=host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable
+      - DSN=host=postgres port=5434 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - JWT_SECRET=fieldeystuliSmartbalimi
     depends_on:
       postgres:
@@ -17,7 +19,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9004/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9004/health"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -58,7 +60,7 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - ./db-data/postgres/:/var/lib/postgresql/data/
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -73,7 +75,7 @@ services:
     ports:
       - "6380:6379"
     volumes:
-      - ./db-data/redis/:/data
+      - redis_data:/data
     networks:
       - app-network
     restart: always
@@ -85,8 +87,8 @@ services:
       - "1883:1883"
       - "9001:9001"
     volumes:
-      - ./db-data/mqtt/:/mosquitto/data
-      - ./db-data/mqtt/log/:/mosquitto/log
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
     networks:
       - app-network
     restart: always
@@ -95,3 +97,9 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  mqtt_data:
+  mqtt_log:

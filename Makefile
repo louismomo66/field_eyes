@@ -7,6 +7,7 @@ help:
 	@echo "  make build         - Build the API binary"
 	@echo "  make run           - Run the API locally"
 	@echo "  make run-local     - Run the API locally with local environment"
+	@echo "  make stop          - Stop the local API and release the port"
 	@echo "  make docker-build  - Build the Docker image"
 	@echo "  make up            - Start all Docker containers"
 	@echo "  make down          - Stop all Docker containers"
@@ -104,3 +105,11 @@ dev: build docker-build up
 .PHONY: dev-stop
 dev-stop: down
 	@echo "Development environment stopped!"
+
+# Stop the local API and release the port
+.PHONY: stop
+stop:
+	@echo "Stopping local API and releasing port..."
+	@-pkill -f "field_eyes_api" || true
+	@-lsof -ti:9004 | xargs kill -9 2>/dev/null || true
+	@echo "Port 9004 released"
