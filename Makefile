@@ -7,6 +7,7 @@ help:
 	@echo "  make build             - Build the API binary"
 	@echo "  make run               - Run the API locally"
 	@echo "  make run-local         - Run the API locally with local environment"
+	@echo "  make run-cloud         - Run for cloud deployments (Render, etc.) without DB requirements"
 	@echo "  make docker-build      - Build the Docker image"
 	@echo "  make docker-run        - Build and run the API in Docker with all services"
 	@echo "  make docker-run-api    - Run only the API container (assumes services are running)"
@@ -63,6 +64,28 @@ run-local: free-port
 	@cp -f .env.local .env 2>/dev/null || echo "Warning: .env.local not found, using existing .env"
 	@DEV_MODE=true go run ./cmd/api
 	@mv -f .env.backup .env 2>/dev/null || true
+
+# Run the API in cloud environment (like Render) with graceful fallbacks
+.PHONY: run-cloud
+run-cloud:
+	@echo "Running API in cloud deployment mode..."
+	@echo "This mode assumes external database connections may not be available"
+	@DEV_MODE=true PORT=$(PORT) go run ./cmd/api
+
+# Build for Render cloud deployment
+.PHONY: build-render
+build-render:
+	@echo "Building for Render deployment..."
+	@mkdir -p ./app
+	@go build -ldflags="-s -w" -o ./app/field_eyes_api ./cmd/api
+	@echo "Binary built at ./app/field_eyes_api"
+
+# Run on Render cloud platform
+.PHONY: start-render
+start-render: build-render
+	@echo "Starting API on Render..."
+	@echo "Using PORT: $(PORT)"
+	@DEV_MODE=true ./app/field_eyes_api
 
 # Build Docker image for development
 .PHONY: docker-build

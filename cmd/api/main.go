@@ -27,6 +27,12 @@ func (app *Config) serve() {
 		port = webPort // Default to webPort constant
 	}
 
+	// Check if we're in a cloud environment
+	isCloudEnv := os.Getenv("RENDER") == "true" || os.Getenv("CLOUD_ENV") == "true"
+	if isCloudEnv {
+		app.InfoLog.Printf("Running in cloud environment on port %s", port)
+	}
+
 	// Create a new server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", port),
@@ -50,6 +56,12 @@ func (app *Config) serve() {
 			app.ErrorChan <- err
 		}
 	}()
+
+	// If on cloud environment (like Render), don't wait for OS signals
+	if isCloudEnv {
+		// For Render and similar platforms, we need to keep the main goroutine alive
+		select {}
+	}
 
 	// Create a channel to listen for OS signals
 	quit := make(chan os.Signal, 1)

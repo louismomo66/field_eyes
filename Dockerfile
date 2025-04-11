@@ -11,8 +11,8 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o field_eyes_api ./cmd/api
+# Build the application with optimization
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
 
 # Create a minimal production image
 FROM alpine:latest
@@ -31,10 +31,17 @@ RUN mkdir -p /app/templates
 
 # Add a simple healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:9004/health || exit 1
+  CMD curl -f http://localhost:${PORT:-9004}/health || exit 1
 
-# Expose the application port
-EXPOSE 9004
+# Expose the application port (will be overridden by PORT env var if set)
+EXPOSE ${PORT:-9004}
+
+# Default environment variables
+ENV DEV_MODE=false
+ENV PORT=9004
+
+# Special environment for Render and other cloud platforms
+ENV CLOUD_ENV=false
 
 # Environment variables documentation
 # DATABASE_URL: postgres://username:password@hostname:port/database?sslmode=disable

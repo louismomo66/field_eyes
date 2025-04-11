@@ -11,6 +11,9 @@ import (
 )
 
 func (app *Config) initDB() *sql.DB {
+	// Check if we're in a cloud environment
+	isCloudEnv := os.Getenv("RENDER") == "true" || os.Getenv("CLOUD_ENV") == "true"
+
 	// Check for development mode
 	devMode := os.Getenv("DEV_MODE")
 	if devMode == "true" {
@@ -37,26 +40,37 @@ func (app *Config) initDB() *sql.DB {
 			app.InfoLog.Printf("Constructed DATABASE_URL from individual parameters")
 		} else {
 			app.ErrorLog.Println("⚠️ Neither DATABASE_URL nor individual DB_* variables are set, database features will not work ⚠️")
+
+			// In cloud environments, log and continue instead of failing
+			if isCloudEnv {
+				app.InfoLog.Println("Running in cloud environment - continuing without database")
+				return nil
+			}
 			return nil
 		}
 	}
 
+	// Customize retry logic for cloud environments
+	maxRetries := 5
+	if isCloudEnv {
+		maxRetries = 3 // Fewer retries on cloud platforms to avoid startup delays
+	}
+	retryDelay := 5 * time.Second
+
 	// Connect to database with retries
 	var db *sql.DB
 	var err error
-	maxRetries := 5
-	retryDelay := 5 * time.Second
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		app.InfoLog.Printf("Connecting to database (attempt %d/%d)...", attempt, maxRetries)
 
 		// Try different hostnames if connection fails (for Docker/cloud environments)
 		currentURL := dbURL
-		if attempt > 1 && strings.Contains(dbURL, "localhost") {
+		if attempt > 1 && strings.Contains(dbURL, "localhost") && !isCloudEnv {
 			// On retry, try with docker container name if using localhost
 			currentURL = strings.Replace(dbURL, "localhost", "postgres", 1)
 			app.InfoLog.Printf("Retrying with alternate hostname: postgres")
-		} else if attempt > 2 && strings.Contains(dbURL, "localhost") {
+		} else if attempt > 2 && strings.Contains(dbURL, "localhost") && !isCloudEnv {
 			// Try with host.docker.internal on third attempt
 			currentURL = strings.Replace(dbURL, "localhost", "host.docker.internal", 1)
 			app.InfoLog.Printf("Retrying with alternate hostname: host.docker.internal")
@@ -86,5 +100,11 @@ func (app *Config) initDB() *sql.DB {
 	}
 
 	app.ErrorLog.Printf("⚠️ Failed to connect to database after %d attempts ⚠️", maxRetries)
+
+	// In cloud environments, log warning and continue without database
+	if isCloudEnv {
+		app.InfoLog.Println("Running in cloud environment - continuing without database")
+	}
+
 	return nil
 }

@@ -58,6 +58,9 @@ type RedisClient struct {
 
 // NewRedisClient creates and initializes a new Redis client connection
 func NewRedisClient() (*RedisClient, error) {
+	// Check if we're in a cloud environment
+	isCloudEnv := os.Getenv("RENDER") == "true" || os.Getenv("CLOUD_ENV") == "true"
+
 	// Get Redis connection parameters from environment variables or use defaults
 	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" {
@@ -79,6 +82,10 @@ func NewRedisClient() (*RedisClient, error) {
 		// Parse the Redis URL
 		parsedOptions, err := redis.ParseURL(redisURL)
 		if err != nil {
+			if isCloudEnv {
+				fmt.Printf("Warning: Failed to parse REDIS_URL: %v. Continuing without Redis.\n", err)
+				return nil, fmt.Errorf("redis not available in cloud environment")
+			}
 			return nil, fmt.Errorf("failed to parse REDIS_URL: %w", err)
 		}
 		options = parsedOptions
@@ -118,7 +125,10 @@ func NewRedisClient() (*RedisClient, error) {
 
 	// Test connection with retry
 	var err error
-	maxRetries := 3
+	maxRetries := 3 // Default retries
+	if isCloudEnv {
+		maxRetries = 2 // Fewer retries in cloud to avoid long startup times
+	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -136,6 +146,10 @@ func NewRedisClient() (*RedisClient, error) {
 	}
 
 	if err != nil {
+		if isCloudEnv {
+			fmt.Printf("Redis connection failed in cloud environment: %v. Continuing without Redis.\n", err)
+			return nil, fmt.Errorf("redis not available in cloud environment")
+		}
 		return nil, fmt.Errorf("failed to connect to redis after %d attempts: %w", maxRetries, err)
 	}
 
