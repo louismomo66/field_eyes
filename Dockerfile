@@ -1,5 +1,5 @@
 # Use an official Go runtime as a base
-FROM golang:1.22.2 as builder
+FROM --platform=linux/arm64 golang:1.22.2 as builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -20,10 +20,10 @@ RUN go get github.com/joho/godotenv
 RUN apt-get update && apt-get install -y wget
 
 # Build the application to run in a scratch container
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
 
 # Use a lightweight Alpine image
-FROM alpine:latest
+FROM --platform=linux/arm64 alpine:latest
 
 # Install ca-certificates and wget for health checks
 RUN apk --no-cache add ca-certificates wget
