@@ -1,9 +1,10 @@
+version: '3.8'
+
 services:
   # PostgreSQL Database
-  postgres:
+  db:
     image: postgres:15
     container_name: fieldeyes-postgres
-    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123456
@@ -11,13 +12,13 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
     networks:
       - fieldeyes-network
 
@@ -25,7 +26,6 @@ services:
   redis:
     image: redis:7
     container_name: fieldeyes-redis
-    restart: unless-stopped
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
@@ -35,7 +35,6 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
     networks:
       - fieldeyes-network
 
@@ -55,42 +54,17 @@ services:
       - fieldeyes-network
 
   # Field Eyes API
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
     container_name: fieldeyes-api
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      mosquitto:
-        condition: service_started
+      - db
+      - redis
     ports:
       - "9004:9004"
-    environment:
-      # Docker configuration
-      - DOCKER_ENV=true
-      - PORT=9004
-      # Database configuration
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres123456
-      - DB_NAME=field_eyes
-      - DATABASE_URL=host=postgres port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable timezone=UTC connect_timeout=5
-      # Redis configuration
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      # MQTT configuration
-      - MQTT_BROKER_URL=tcp://mosquitto:1883
-      - MQTT_CLIENT_ID=field_eyes_server
-      - MQTT_TOPIC_ROOT=field_eyes/devices
-      # JWT and other settings
-      - JWT_SECRET=fieldeystuliSmartbalimi
-      - DEV_MODE=false
+    env_file:
+      - .env
     networks:
       - fieldeyes-network
     healthcheck:
@@ -98,7 +72,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
 
   # Database Admin Tool
   pgadmin:
@@ -110,7 +83,7 @@ services:
     ports:
       - "5050:80"
     depends_on:
-      - postgres
+      - db
     networks:
       - fieldeyes-network
       
@@ -147,5 +120,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  pgdata:
   redis_data: 
