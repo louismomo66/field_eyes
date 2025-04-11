@@ -12,7 +12,7 @@ RUN go mod download
 COPY . .
 
 # Install required packages
-RUN apt-get update && apt-get install -y wget ca-certificates
+RUN apt-get update && apt-get install -y wget ca-certificates iputils-ping dnsutils netcat-openbsd
 
 # Build the application
 RUN go build -o field_eyes_api ./cmd/api
@@ -21,8 +21,9 @@ RUN go build -o field_eyes_api ./cmd/api
 EXPOSE 9004
 
 # Set default environment variables using DATABASE_URL
-ENV DATABASE_URL=postgres://postgres:postgres123456@db:5432/field_eyes?sslmode=disable
+ENV DATABASE_URL=postgres://postgres:postgres123456@fieldeyes-db:5432/field_eyes?sslmode=disable
 ENV JWT_SECRET=fieldeystuliSmartbalimi
+ENV DEV_MODE=false
 
 # Command to run the executable
 CMD ["./field_eyes_api"]

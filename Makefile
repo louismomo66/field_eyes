@@ -28,14 +28,14 @@ build:
 .PHONY: run
 run:
 	@echo "Running API locally..."
-	go run ./cmd/api
+	@go run ./cmd/api
 
 # Run the API locally with local environment settings
 .PHONY: run-local
 run-local:
-	@echo "Running API locally with local environment..."
-	cp .env.local .env
-	go run ./cmd/api
+	@echo "Running API locally with .env.local..."
+	@cp .env.local .env
+	@DEV_MODE=true go run ./cmd/api
 
 # Build Docker image for development
 .PHONY: docker-build
@@ -116,3 +116,48 @@ docker-up:
 docker-down:
 	@echo "Stopping Docker services..."
 	docker-compose down
+
+# New targets
+.PHONY: build up down clean logs debug
+
+# Build the Docker images
+build:
+	@echo "Building Docker image..."
+	docker-compose build
+
+# Start the Docker services
+up: build
+	@echo "Starting Docker services..."
+	docker-compose up -d
+
+# Stop the Docker services
+down:
+	@echo "Stopping Docker services..."
+	docker-compose down
+
+# Stop and remove all Docker resources
+clean:
+	@echo "Cleaning up all Docker resources..."
+	docker-compose down --volumes --remove-orphans
+	docker network prune -f
+
+# Show logs from the app container
+logs:
+	docker-compose logs -f app
+
+# Run the debug container
+debug:
+	docker-compose run --rm debug
+
+# Run the database setup
+db-init:
+	docker-compose exec db psql -U postgres -c "CREATE DATABASE field_eyes WITH OWNER postgres ENCODING 'UTF8';"
+
+# Show Docker status
+status:
+	@echo "Docker containers:"
+	@docker ps -a --filter "name=fieldeyes*"
+	@echo "\nDocker networks:"
+	@docker network ls --filter "name=field_eyes*"
+	@echo "\nDocker volumes:"
+	@docker volume ls --filter "name=field_eyes*"
