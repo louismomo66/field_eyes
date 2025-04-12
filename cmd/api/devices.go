@@ -257,55 +257,54 @@ func (app *Config) GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var logs []*data.DeviceData
-	/*
-		var cacheHit bool = false
+	var cacheHit bool = false
 
-		// Try to get logs from Redis cache if Redis is available
-		if app.Redis != nil {
-			cachedLogs, err := app.Redis.GetCachedDeviceLogs(device.ID)
-			if err != nil {
-				app.ErrorLog.Printf("Redis cache error: %v", err)
-			} else if cachedLogs != nil {
-				// Convert the cached logs to device data objects
-				logs = make([]*data.DeviceData, len(cachedLogs))
-				for i, cl := range cachedLogs {
-					logs[i] = &data.DeviceData{
-						DeviceID:        cl.DeviceID,
-						SerialNumber:    cl.SerialNumber,
-						Temperature:     cl.Temperature,
-						Humidity:        cl.Humidity,
-						Nitrogen:        cl.Nitrogen,
-						Phosphorous:     cl.Phosphorous,
-						Potassium:       cl.Potassium,
-						PH:              cl.PH,
-						SoilMoisture:    cl.SoilMoisture,
-						SoilTemperature: cl.SoilTemperature,
-						SoilHumidity:    cl.SoilHumidity,
-						Longitude:       cl.Longitude,
-						Latitude:        cl.Latitude,
-						CreatedAt:       cl.CreatedAt,
-					}
+	// Try to get logs from Redis cache if Redis is available
+	if app.Redis != nil {
+		cachedLogs, err := app.Redis.GetCachedDeviceLogs(device.ID)
+		if err != nil {
+			app.ErrorLog.Printf("Redis cache error: %v", err)
+		} else if cachedLogs != nil {
+			// Convert the cached logs to device data objects
+			logs = make([]*data.DeviceData, len(cachedLogs))
+			for i, cl := range cachedLogs {
+				logs[i] = &data.DeviceData{
+					DeviceID:        cl.DeviceID,
+					SerialNumber:    cl.SerialNumber,
+					Temperature:     cl.Temperature,
+					Humidity:        cl.Humidity,
+					Nitrogen:        cl.Nitrogen,
+					Phosphorous:     cl.Phosphorous,
+					Potassium:       cl.Potassium,
+					PH:              cl.PH,
+					SoilMoisture:    cl.SoilMoisture,
+					SoilTemperature: cl.SoilTemperature,
+					SoilHumidity:    cl.SoilHumidity,
+					Longitude:       cl.Longitude,
+					Latitude:        cl.Latitude,
+					CreatedAt:       cl.CreatedAt,
 				}
-				cacheHit = true
-				app.InfoLog.Printf("Cache hit for device logs: %s (ID: %d)", serialNumber, device.ID)
 			}
+			cacheHit = true
+			app.InfoLog.Printf("Cache hit for device logs: %s (ID: %d), found %d logs",
+				serialNumber, device.ID, len(logs))
 		}
-	*/
-
-	// If not found in cache, retrieve from database
-	//if !cacheHit {
-	app.InfoLog.Printf("Getting device logs from database: %s (ID: %d)", serialNumber, device.ID)
-	logs, err = app.Models.DeviceData.GetLogsByDeviceID(device.ID)
-	if err != nil {
-		app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
-		app.ErrorLog.Println("failed to retrieve device logs:", err)
-		return
 	}
 
-	// Log the number of logs retrieved
-	app.InfoLog.Printf("Retrieved %d logs for device %s (ID: %d)", len(logs), serialNumber, device.ID)
+	// If not found in cache, retrieve from database
+	if !cacheHit {
+		app.InfoLog.Printf("Cache miss for device logs: %s (ID: %d)", serialNumber, device.ID)
+		logs, err = app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+		if err != nil {
+			app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
+			app.ErrorLog.Println("failed to retrieve device logs:", err)
+			return
+		}
 
-	/*
+		// Log the number of logs retrieved
+		app.InfoLog.Printf("Retrieved %d logs for device %s (ID: %d) from database",
+			len(logs), serialNumber, device.ID)
+
 		// Store in cache for future requests if Redis is available
 		if app.Redis != nil && len(logs) > 0 {
 			go func() {
@@ -334,12 +333,12 @@ func (app *Config) GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 				if err := app.Redis.CacheDeviceLogs(device.ID, cacheableLogs); err != nil {
 					app.ErrorLog.Printf("Failed to cache device logs: %v", err)
 				} else {
-					app.InfoLog.Printf("Successfully cached device logs for device %s", serialNumber)
+					app.InfoLog.Printf("Successfully cached %d logs for device %s",
+						len(logs), serialNumber)
 				}
 			}()
 		}
-	*/
-	//}
+	}
 
 	// Respond with the logs
 	app.writeJSON(w, http.StatusOK, logs)
