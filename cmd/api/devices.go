@@ -623,3 +623,77 @@ func (app *Config) GetUnclaimedDevices(w http.ResponseWriter, r *http.Request) {
 	// Return the list of unclaimed devices
 	app.writeJSON(w, http.StatusOK, devices)
 }
+
+// GetUserDevices returns all devices belonging to the authenticated user
+func (app *Config) GetUserDevices(w http.ResponseWriter, r *http.Request) {
+	// Extract user information from the token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Try to get devices from Redis cache if Redis is available
+	var devices []*data.Device
+	var cacheHit bool = false
+
+	if app.Redis != nil {
+		cachedDevices, err := app.Redis.GetCachedUserDevices(userID)
+		if err == nil && len(cachedDevices) > 0 {
+			// Convert cache model to full device model
+			cacheHit = true
+			app.InfoLog.Printf("Retrieved %d devices from cache for user %d", len(cachedDevices), userID)
+
+			// We'll still need to get the full device data from the database
+			// because the cache only contains basic information
+			var deviceIDs []uint
+			for _, d := range cachedDevices {
+				deviceIDs = append(deviceIDs, d.ID)
+			}
+		}
+	}
+
+	// If not in cache or Redis not available, query the database
+	if !cacheHit {
+		var err error
+		devices, err = app.Models.Device.GetByUserID(userID)
+		if err != nil {
+			app.errorJSON(w, errors.New("failed to retrieve user's devices"), http.StatusInternalServerError)
+			app.ErrorLog.Printf("Failed to retrieve devices for user %d: %v", userID, err)
+			return
+		}
+
+		// Cache results if Redis is available
+		if app.Redis != nil && len(devices) > 0 {
+			go func(userID uint, devices []*data.Device) {
+				// Convert to cache model
+				var deviceForCache []*DeviceForCache
+				for _, d := range devices {
+					deviceForCache = append(deviceForCache, &DeviceForCache{
+						ID:           d.ID,
+						SerialNumber: d.SerialNumber,
+						DeviceType:   d.DeviceType,
+						UserID:       d.UserID,
+						CreatedAt:    d.CreatedAt,
+						UpdatedAt:    d.UpdatedAt,
+					})
+				}
+
+				if err := app.Redis.CacheUserDevices(userID, deviceForCache); err != nil {
+					app.ErrorLog.Printf("Failed to cache user devices: %v", err)
+				} else {
+					app.InfoLog.Printf("Cached %d devices for user %d", len(devices), userID)
+				}
+			}(userID, devices)
+		}
+	}
+
+	// If no devices found, return empty array
+	if devices == nil {
+		devices = []*data.Device{}
+	}
+
+	// Return list of devices
+	app.writeJSON(w, http.StatusOK, devices)
+}

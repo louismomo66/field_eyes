@@ -24,9 +24,12 @@ func (app *Config) routes() http.Handler {
 		r.Post("/reset-password", app.ResetPassword)   // Endpoint to reset password with OTP
 
 		// Device-related endpoints
-		r.Post("/register-device", app.RegisterDevice) // Endpoint to register a device
-		r.Post("/log-device-data", app.LogDeviceData)  // Endpoint to log device data
-		r.Get("/get-device-logs", app.GetDeviceLogs)   // Endpoint to fetch device logs
+		r.Post("/register-device", app.RegisterDevice)       // Endpoint to register a device
+		r.Post("/log-device-data", app.LogDeviceData)        // Endpoint to log device data
+		r.Get("/get-device-logs", app.GetDeviceLogs)         // Endpoint to fetch device logs
+		r.Get("/unclaimed-devices", app.GetUnclaimedDevices) // Endpoint to fetch unclaimed devices
+		r.Post("/claim-device", app.ClaimDevice)             // Endpoint to claim a device
+		r.Get("/user-devices", app.GetUserDevices)           // Endpoint to fetch user's devices
 
 		// Analysis endpoints
 		r.Get("/analyze-device", app.AnalyzeDeviceData) // Endpoint for ML analysis of device data
