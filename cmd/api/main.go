@@ -13,7 +13,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const webPort = "9002"
+const webPort = "8086"
 
 func (app *Config) serve() {
 	// Create the server with middleware for sessions
