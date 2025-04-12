@@ -127,6 +127,12 @@ func main() {
 
 	// Initialize Session Manager
 	app.Sessions = InitSession()
+
+	// If Redis is available, update the session manager with the pool
+	if app.Redis != nil && app.Redis.Pool != nil {
+		app.Sessions.Pool = app.Redis.Pool
+	}
+
 	app.InfoLog.Println("Session manager initialized")
 
 	// connect to the database
