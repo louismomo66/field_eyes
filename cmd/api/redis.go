@@ -1,15 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/gomodule/redigo/redis"
 )
 
 // Redis cache expiration times
@@ -51,12 +48,12 @@ type DeviceForCache struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// RedisClient wraps the Redis client with application-specific methods
+// RedisClient wraps the Redis connection pool with application-specific methods
 type RedisClient struct {
-	Client *redis.Client
+	Pool *redis.Pool
 }
 
-// NewRedisClient creates and initializes a new Redis client connection
+// NewRedisClient creates and initializes a new Redis client connection pool
 func NewRedisClient() (*RedisClient, error) {
 	// Get Redis connection parameters from environment variables or use defaults
 	redisHost := os.Getenv("REDIS_HOST")
@@ -70,39 +67,49 @@ func NewRedisClient() (*RedisClient, error) {
 	}
 
 	redisPassword := os.Getenv("REDIS_PASSWORD")
+	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
 
-	redisDB := os.Getenv("REDIS_DB")
-	db := 0
-	if redisDB != "" {
-		var err error
-		db, err = strconv.Atoi(redisDB)
-		if err != nil {
-			db = 0
-		}
+	// Create a Redis connection pool
+	pool := &redis.Pool{
+		MaxIdle:     10,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", redisAddr)
+			if err != nil {
+				return nil, err
+			}
+			if redisPassword != "" {
+				if _, err := c.Do("AUTH", redisPassword); err != nil {
+					c.Close()
+					return nil, err
+				}
+			}
+			return c, nil
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			if time.Since(t) < time.Minute {
+				return nil
+			}
+			_, err := c.Do("PING")
+			return err
+		},
 	}
 
-	addr := fmt.Sprintf("%s:%s", redisHost, redisPort)
-	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: redisPassword,
-		DB:       db,
-	})
-
 	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	conn := pool.Get()
+	defer conn.Close()
 
-	_, err := client.Ping(ctx).Result()
+	_, err := conn.Do("PING")
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
-	return &RedisClient{Client: client}, nil
+	return &RedisClient{Pool: pool}, nil
 }
 
-// Close closes the Redis client connection
+// Close closes the Redis client connection pool
 func (r *RedisClient) Close() error {
-	return r.Client.Close()
+	return r.Pool.Close()
 }
 
 // CacheDeviceLogs stores device logs in Redis with expiration
@@ -113,18 +120,23 @@ func (r *RedisClient) CacheDeviceLogs(deviceID uint, logs []*DeviceDataForCache)
 		return err
 	}
 
-	ctx := context.Background()
-	return r.Client.Set(ctx, key, data, MediumCacheDuration).Err()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("SETEX", key, int(MediumCacheDuration.Seconds()), data)
+	return err
 }
 
 // GetCachedDeviceLogs retrieves device logs from Redis cache
 func (r *RedisClient) GetCachedDeviceLogs(deviceID uint) ([]*DeviceDataForCache, error) {
 	key := fmt.Sprintf("device_logs:%d", deviceID)
 
-	ctx := context.Background()
-	data, err := r.Client.Get(ctx, key).Bytes()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	data, err := redis.Bytes(conn.Do("GET", key))
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
+		if err == redis.ErrNil {
 			return nil, nil // Cache miss, not an error
 		}
 		return nil, err
@@ -147,18 +159,23 @@ func (r *RedisClient) CacheDeviceLogsBySerial(serialNumber string, logs []*Devic
 		return err
 	}
 
-	ctx := context.Background()
-	return r.Client.Set(ctx, key, data, MediumCacheDuration).Err()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("SETEX", key, int(MediumCacheDuration.Seconds()), data)
+	return err
 }
 
 // GetCachedDeviceLogsBySerial retrieves device logs by serial number from Redis
 func (r *RedisClient) GetCachedDeviceLogsBySerial(serialNumber string) ([]*DeviceDataForCache, error) {
 	key := fmt.Sprintf("device_logs_serial:%s", serialNumber)
 
-	ctx := context.Background()
-	data, err := r.Client.Get(ctx, key).Bytes()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	data, err := redis.Bytes(conn.Do("GET", key))
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
+		if err == redis.ErrNil {
 			return nil, nil // Cache miss, not an error
 		}
 		return nil, err
@@ -181,18 +198,23 @@ func (r *RedisClient) CacheUserDevices(userID uint, devices []*DeviceForCache) e
 		return err
 	}
 
-	ctx := context.Background()
-	return r.Client.Set(ctx, key, data, MediumCacheDuration).Err()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("SETEX", key, int(MediumCacheDuration.Seconds()), data)
+	return err
 }
 
 // GetCachedUserDevices retrieves a user's devices from Redis
 func (r *RedisClient) GetCachedUserDevices(userID uint) ([]*DeviceForCache, error) {
 	key := fmt.Sprintf("user_devices:%d", userID)
 
-	ctx := context.Background()
-	data, err := r.Client.Get(ctx, key).Bytes()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	data, err := redis.Bytes(conn.Do("GET", key))
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
+		if err == redis.ErrNil {
 			return nil, nil // Cache miss, not an error
 		}
 		return nil, err
@@ -215,19 +237,24 @@ func (r *RedisClient) CacheMLAnalysisResults(deviceID uint, analysisType string,
 		return err
 	}
 
-	ctx := context.Background()
-	return r.Client.Set(ctx, key, data, ShortCacheDuration).Err()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("SETEX", key, int(ShortCacheDuration.Seconds()), data)
+	return err
 }
 
 // GetCachedMLAnalysisResults retrieves ML analysis results from Redis
 func (r *RedisClient) GetCachedMLAnalysisResults(deviceID uint, analysisType string, result interface{}) error {
 	key := fmt.Sprintf("ml_analysis:%d:%s", deviceID, analysisType)
 
-	ctx := context.Background()
-	data, err := r.Client.Get(ctx, key).Bytes()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	data, err := redis.Bytes(conn.Do("GET", key))
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return redis.Nil // Cache miss
+		if err == redis.ErrNil {
+			return err // Cache miss
 		}
 		return err
 	}
@@ -237,20 +264,31 @@ func (r *RedisClient) GetCachedMLAnalysisResults(deviceID uint, analysisType str
 
 // InvalidateCache removes cached data for a specific key
 func (r *RedisClient) InvalidateCache(key string) error {
-	ctx := context.Background()
-	return r.Client.Del(ctx, key).Err()
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("DEL", key)
+	return err
 }
 
 // InvalidateDeviceLogsCache removes cached device logs
 func (r *RedisClient) InvalidateDeviceLogsCache(deviceID uint) error {
 	key := fmt.Sprintf("device_logs:%d", deviceID)
-	ctx := context.Background()
-	return r.Client.Del(ctx, key).Err()
+
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("DEL", key)
+	return err
 }
 
 // InvalidateUserDevicesCache removes cached user devices
 func (r *RedisClient) InvalidateUserDevicesCache(userID uint) error {
 	key := fmt.Sprintf("user_devices:%d", userID)
-	ctx := context.Background()
-	return r.Client.Del(ctx, key).Err()
+
+	conn := r.Pool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("DEL", key)
+	return err
 }

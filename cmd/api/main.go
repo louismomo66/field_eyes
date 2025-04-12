@@ -13,12 +13,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const webPort = "9004"
+const webPort = "9002"
 
 func (app *Config) serve() {
+	// Create the server with middleware for sessions
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", webPort),
-		Handler: app.routes(),
+		Handler: app.Sessions.LoadAndSave(app.routes()),
 	}
 	app.InfoLog.Println("Starting web server...")
 	err := srv.ListenAndServe()
@@ -123,6 +124,10 @@ func main() {
 			}
 		}()
 	}
+
+	// Initialize Session Manager
+	app.Sessions = InitSession()
+	app.InfoLog.Println("Session manager initialized")
 
 	// connect to the database
 	db := app.initDB()

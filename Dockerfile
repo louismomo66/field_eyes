@@ -1,5 +1,5 @@
 # Use an official Go runtime as a base
-FROM --platform=linux/arm64 golang:1.22.2 as builder
+FROM golang:1.23.2 as builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -19,11 +19,11 @@ RUN go get github.com/joho/godotenv
 # Install wget for health checks
 RUN apt-get update && apt-get install -y wget
 
-# Build the application to run in a scratch container
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
+# Build the application (using the target platform's architecture)
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
 
 # Use a lightweight Alpine image
-FROM --platform=linux/arm64 alpine:latest
+FROM alpine:latest
 
 # Install ca-certificates and wget for health checks
 RUN apk --no-cache add ca-certificates wget
@@ -46,7 +46,7 @@ ENV DB_NAME=field_eyes
 ENV DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
 
 # Expose port
-EXPOSE 9004
+EXPOSE 9002
 
 # Command to run the executable
 CMD ["./field_eyes_api"] 

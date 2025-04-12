@@ -22,7 +22,7 @@ help:
 build:
 	@echo "Building API binary..."
 	mkdir -p ./app
-	go build -o ./app/field_eyes_api ./cmd/api
+	go build -buildvcs=false -o ./app/field_eyes_api ./cmd/api
 	@echo "Binary built at ./app/field_eyes_api"
 
 # Run the API locally
@@ -42,31 +42,31 @@ run-local:
 .PHONY: docker-build
 docker-build:
 	@echo "Building Docker image..."
-	docker-compose --profile dev build
+	docker compose --profile dev build
 
 # Build Docker image for cloud deployment
 .PHONY: docker-build-cloud
 docker-build-cloud:
 	@echo "Building Docker image for cloud deployment..."
-	docker-compose --profile cloud build api-cloud
+	docker compose --profile cloud build api-cloud
 
 # Start all Docker containers for development
 .PHONY: up
 up: build docker-build
 	@echo "Starting Docker containers..."
-	docker-compose --profile dev up -d
+	docker compose --profile dev up -d
 
 # Stop all Docker containers
 .PHONY: down
 down:
 	@echo "Stopping Docker containers..."
-	docker-compose down
+	docker compose down
 
 # View Docker container logs
 .PHONY: docker-logs
 docker-logs:
 	@echo "Viewing Docker logs..."
-	docker-compose logs -f
+	docker compose logs -f
 
 # Clean up build artifacts
 .PHONY: clean
@@ -94,7 +94,7 @@ deploy: docker-build-cloud
 	@echo "Deploying to cloud platform..."
 	@echo "Make sure you are logged in to the cloud platform's CLI"
 	@echo "Set REGISTRY_URL environment variable to your registry URL"
-	docker-compose --profile cloud push api-cloud
+	docker compose --profile cloud push api-cloud
 
 # All-in-one command to start development environment
 .PHONY: dev

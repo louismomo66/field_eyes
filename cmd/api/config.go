@@ -18,6 +18,7 @@ type Config struct {
 	Mailer        email.Mailer
 	Redis         *RedisClient
 	MQTT          *MQTTClient
+	Sessions      *SessionManager
 	ErrorChan     chan error
 	ErrorChanDone chan bool
 }
