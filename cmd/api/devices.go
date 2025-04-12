@@ -634,64 +634,27 @@ func (app *Config) GetUserDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try to get devices from Redis cache if Redis is available
-	var devices []*data.Device
-	var cacheHit bool = false
+	app.InfoLog.Printf("Retrieving devices for user ID: %d", userID)
 
-	if app.Redis != nil {
-		cachedDevices, err := app.Redis.GetCachedUserDevices(userID)
-		if err == nil && len(cachedDevices) > 0 {
-			// Convert cache model to full device model
-			cacheHit = true
-			app.InfoLog.Printf("Retrieved %d devices from cache for user %d", len(cachedDevices), userID)
-
-			// We'll still need to get the full device data from the database
-			// because the cache only contains basic information
-			var deviceIDs []uint
-			for _, d := range cachedDevices {
-				deviceIDs = append(deviceIDs, d.ID)
-			}
-		}
+	// Get devices directly from the database (not using Redis)
+	devices, err := app.Models.Device.GetByUserID(userID)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to retrieve user's devices"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to retrieve devices for user %d: %v", userID, err)
+		return
 	}
 
-	// If not in cache or Redis not available, query the database
-	if !cacheHit {
-		var err error
-		devices, err = app.Models.Device.GetByUserID(userID)
-		if err != nil {
-			app.errorJSON(w, errors.New("failed to retrieve user's devices"), http.StatusInternalServerError)
-			app.ErrorLog.Printf("Failed to retrieve devices for user %d: %v", userID, err)
-			return
-		}
-
-		// Cache results if Redis is available
-		if app.Redis != nil && len(devices) > 0 {
-			go func(userID uint, devices []*data.Device) {
-				// Convert to cache model
-				var deviceForCache []*DeviceForCache
-				for _, d := range devices {
-					deviceForCache = append(deviceForCache, &DeviceForCache{
-						ID:           d.ID,
-						SerialNumber: d.SerialNumber,
-						DeviceType:   d.DeviceType,
-						UserID:       d.UserID,
-						CreatedAt:    d.CreatedAt,
-						UpdatedAt:    d.UpdatedAt,
-					})
-				}
-
-				if err := app.Redis.CacheUserDevices(userID, deviceForCache); err != nil {
-					app.ErrorLog.Printf("Failed to cache user devices: %v", err)
-				} else {
-					app.InfoLog.Printf("Cached %d devices for user %d", len(devices), userID)
-				}
-			}(userID, devices)
-		}
+	// Log details about each device
+	app.InfoLog.Printf("Retrieved %d devices from database for user %d", len(devices), userID)
+	for i, device := range devices {
+		app.InfoLog.Printf("Device %d: ID=%d, SerialNumber=%s, Type=%s",
+			i+1, device.ID, device.SerialNumber, device.DeviceType)
 	}
 
 	// If no devices found, return empty array
 	if devices == nil {
 		devices = []*data.Device{}
+		app.InfoLog.Printf("No devices found for user %d", userID)
 	}
 
 	// Return list of devices
