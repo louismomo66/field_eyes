@@ -217,3 +217,13 @@ func (r *NotificationRepository) MarkAllAsRead(userID uint) error {
 func (r *NotificationRepository) DeleteNotification(id uint) error {
 	return r.db.Delete(&Notification{}, id).Error
 }
+
+// DeleteByID deletes a device by its ID
+func (r *DeviceRepository) DeleteByID(id uint) error {
+	return r.db.Delete(&Device{}, id).Error
+}
+
+// DeleteByDeviceID deletes all device data records for a specific device
+func (r *DeviceDataRepository) DeleteByDeviceID(deviceID uint) error {
+	return r.db.Where("device_id = ?", deviceID).Delete(&DeviceData{}).Error
+}

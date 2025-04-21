@@ -27,6 +27,7 @@ type DeviceInterface interface {
 	GetBySerialNumber(serialNumber string) (*Device, error)
 	Update(device *Device) error
 	GetUnclaimedDevices() ([]*Device, error)
+	DeleteByID(id uint) error
 	// Add other methods as needed
 }
 
@@ -35,6 +36,7 @@ type DeviceDataInterface interface {
 	CreateLog(data *DeviceData) error
 	GetLogsByDeviceID(deviceID uint) ([]*DeviceData, error)
 	GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error)
+	DeleteByDeviceID(deviceID uint) error
 }
 
 // NotificationInterface defines the methods for Notification operations

@@ -30,6 +30,8 @@ func (app *Config) routes() http.Handler {
 		r.Get("/unclaimed-devices", app.GetUnclaimedDevices) // Endpoint to fetch unclaimed devices
 		r.Post("/claim-device", app.ClaimDevice)             // Endpoint to claim a device
 		r.Get("/user-devices", app.GetUserDevices)           // Endpoint to fetch user's devices
+		r.Get("/latest-device-log", app.GetLatestDeviceLog)  // Endpoint to fetch only the latest log for a device
+		r.Delete("/delete-device", app.DeleteDevice)         // Endpoint to delete a device by serial number
 
 		// Analysis endpoints
 		r.Get("/analyze-device", app.AnalyzeDeviceData) // Endpoint for ML analysis of device data

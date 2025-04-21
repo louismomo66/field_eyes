@@ -665,3 +665,120 @@ func (app *Config) GetUserDevices(w http.ResponseWriter, r *http.Request) {
 	// Return list of devices
 	app.writeJSON(w, http.StatusOK, devices)
 }
+
+// GetLatestDeviceLog returns only the most recent log for a device
+func (app *Config) GetLatestDeviceLog(w http.ResponseWriter, r *http.Request) {
+	// Extract user information from the token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Get the device serial number from the query parameters
+	serialNumber := r.URL.Query().Get("serial_number")
+	if serialNumber == "" {
+		app.errorJSON(w, errors.New("missing device serial number"), http.StatusBadRequest)
+		app.ErrorLog.Println("missing device serial number")
+		return
+	}
+
+	// Validate that the device exists and belongs to the user
+	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
+	if err != nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		app.ErrorLog.Println("device not found:", err)
+		return
+	}
+	if device.UserID != userID {
+		app.errorJSON(w, errors.New("unauthorized: device does not belong to the user"), http.StatusUnauthorized)
+		app.ErrorLog.Println("unauthorized: device does not belong to the user")
+		return
+	}
+
+	// Get logs for the device (sorted by created_at DESC)
+	logs, err := app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to retrieve device logs:", err)
+		return
+	}
+
+	// Check if logs exist
+	if len(logs) == 0 {
+		app.errorJSON(w, errors.New("no logs found for this device"), http.StatusNotFound)
+		app.ErrorLog.Printf("No logs found for device %s (ID: %d)", serialNumber, device.ID)
+		return
+	}
+
+	// Return only the latest log (first item since sorted by created_at DESC)
+	latestLog := logs[0]
+	app.InfoLog.Printf("Retrieved latest log for device %s (ID: %d) from %s",
+		serialNumber, device.ID, latestLog.CreatedAt.Format(time.RFC3339))
+
+	app.writeJSON(w, http.StatusOK, latestLog)
+}
+
+// DeleteDevice deletes a device by its serial number if the user is authorized
+func (app *Config) DeleteDevice(w http.ResponseWriter, r *http.Request) {
+	// Extract user information from the token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Get the device serial number from the query parameters
+	serialNumber := r.URL.Query().Get("serial_number")
+	if serialNumber == "" {
+		app.errorJSON(w, errors.New("missing device serial number"), http.StatusBadRequest)
+		app.ErrorLog.Println("missing device serial number")
+		return
+	}
+
+	// Validate that the device exists and belongs to the user
+	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
+	if err != nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		app.ErrorLog.Printf("device not found: %v", err)
+		return
+	}
+
+	if device.UserID != userID {
+		app.errorJSON(w, errors.New("unauthorized: device does not belong to the user"), http.StatusUnauthorized)
+		app.ErrorLog.Printf("user %d attempted to delete device owned by user %d", userID, device.UserID)
+		return
+	}
+
+	// Delete device data records first
+	app.InfoLog.Printf("Deleting device data for device %s (ID: %d)", serialNumber, device.ID)
+	if err := app.Models.DeviceData.DeleteByDeviceID(device.ID); err != nil {
+		app.errorJSON(w, errors.New("failed to delete device data"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("failed to delete device data: %v", err)
+		return
+	}
+
+	// Delete the device
+	app.InfoLog.Printf("Deleting device %s (ID: %d) owned by user %d", serialNumber, device.ID, userID)
+	if err := app.Models.Device.DeleteByID(device.ID); err != nil {
+		app.errorJSON(w, errors.New("failed to delete device"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("failed to delete device: %v", err)
+		return
+	}
+
+	// Invalidate cache if Redis is available
+	if app.Redis != nil {
+		go func(userID uint) {
+			if err := app.Redis.InvalidateUserDevicesCache(userID); err != nil {
+				app.ErrorLog.Printf("failed to invalidate user devices cache: %v", err)
+			}
+		}(userID)
+	}
+
+	// Return success response
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("device %s successfully deleted", serialNumber),
+	})
+}
