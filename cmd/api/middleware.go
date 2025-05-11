@@ -132,20 +132,17 @@ func (app *Config) GetUserInfoFromToken(r *http.Request) (uint, string, string, 
 // EnableCORS is a middleware to allow cross-origin requests
 func (app *Config) EnableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers - allow all origins, methods, and headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Max-Age", "3600")
 
 		// Handle preflight requests
 		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusNoContent) // 204 status is preferred for OPTIONS
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		// Call the next handler
 		next.ServeHTTP(w, r)
 	})
 }

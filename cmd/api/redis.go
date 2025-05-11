@@ -21,21 +21,22 @@ const (
 
 // DeviceDataForCache represents the device data for caching
 type DeviceDataForCache struct {
-	ID              uint      `json:"id"`
-	DeviceID        uint      `json:"device_id"`
-	SerialNumber    string    `json:"serial_number"`
-	Temperature     float64   `json:"temperature"`
-	Humidity        float64   `json:"humidity"`
-	Nitrogen        float64   `json:"nitrogen"`
-	Phosphorous     float64   `json:"phosphorous"`
-	Potassium       float64   `json:"potassium"`
-	PH              float64   `json:"ph"`
-	SoilMoisture    float64   `json:"soil_moisture"`
-	SoilTemperature float64   `json:"soil_temperature"`
-	SoilHumidity    float64   `json:"soil_humidity"`
-	Longitude       float64   `json:"longitude"`
-	Latitude        float64   `json:"latitude"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID                     uint      `json:"id"`
+	DeviceID               uint      `json:"device_id"`
+	SerialNumber           string    `json:"serial_number"`
+	Temperature            float64   `json:"temperature"`
+	Humidity               float64   `json:"humidity"`
+	Nitrogen               float64   `json:"nitrogen"`
+	Phosphorous            float64   `json:"phosphorous"`
+	Potassium              float64   `json:"potassium"`
+	PH                     float64   `json:"ph"`
+	SoilMoisture           float64   `json:"soil_moisture"`
+	SoilTemperature        float64   `json:"soil_temperature"`
+	SoilHumidity           float64   `json:"soil_humidity"`
+	ElectricalConductivity float64   `json:"electrical_conductivity"`
+	Longitude              float64   `json:"longitude"`
+	Latitude               float64   `json:"latitude"`
+	CreatedAt              time.Time `json:"created_at"`
 }
 
 // DeviceForCache represents the device for caching

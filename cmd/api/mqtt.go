@@ -34,7 +34,7 @@ var messageBuffers = make(map[string]*messageBuffer)
 // NewMQTTClient creates a new MQTT client with the provided configuration
 func NewMQTTClient(app *Config) (*MQTTClient, error) {
 	brokerURL := fmt.Sprintf("tcp://%s:%s", os.Getenv("MQTT_BROKER"), os.Getenv("MQTT_PORT"))
-	clientID := fmt.Sprintf("field_eyes_server_%d_%d", time.Now().UnixNano(), os.Getpid())
+	clientID := fmt.Sprintf("field_eyes_server_%d", time.Now().UnixNano())
 	topicRoot := os.Getenv("MQTT_TOPIC_ROOT")
 	if topicRoot == "" {
 		topicRoot = "field_eyes/devices"

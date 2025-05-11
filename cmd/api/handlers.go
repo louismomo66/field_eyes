@@ -232,17 +232,114 @@ func (app *Config) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get query parameter for filtering unread notifications
+	// Get query parameters for filtering
 	unreadOnly := r.URL.Query().Get("unread")
+	deviceIDParam := r.URL.Query().Get("device_id")
+	deviceNameParam := r.URL.Query().Get("device_name")
+
+	app.InfoLog.Printf("GetNotifications called with deviceIDParam=%s, deviceNameParam=%s, unreadOnly=%s, userID=%d",
+		deviceIDParam, deviceNameParam, unreadOnly, userID)
 
 	var notifications []*data.Notification
 	var fetchErr error
 
-	// Fetch notifications based on filter
-	if unreadOnly == "true" {
-		notifications, fetchErr = app.Models.Notification.GetUnreadNotifications(userID)
+	// First check if device_name is provided (highest priority for device identification)
+	if deviceNameParam != "" {
+		// Directly use device_name to query by serial number
+		app.InfoLog.Printf("Getting notifications by explicit device name: %s", deviceNameParam)
+
+		if unreadOnly == "true" {
+			// First get all notifications for the device
+			allNotifications, err := app.Models.Notification.GetNotificationsByDeviceName(userID, deviceNameParam)
+			if err == nil {
+				// Then filter to unread only in memory
+				notifications = []*data.Notification{}
+				for _, notification := range allNotifications {
+					if !notification.Read {
+						notifications = append(notifications, notification)
+					}
+				}
+				app.InfoLog.Printf("Found %d unread notifications of %d total for device name %s",
+					len(notifications), len(allNotifications), deviceNameParam)
+			} else {
+				fetchErr = err
+				app.ErrorLog.Printf("Error getting notifications by device name: %v", err)
+			}
+		} else {
+			// Get all notifications for the device
+			notifications, fetchErr = app.Models.Notification.GetNotificationsByDeviceName(userID, deviceNameParam)
+			if fetchErr != nil {
+				app.ErrorLog.Printf("Error getting notifications by device name: %v", fetchErr)
+			} else {
+				app.InfoLog.Printf("Found %d notifications for device name %s", len(notifications), deviceNameParam)
+			}
+		}
+	} else if deviceIDParam != "" {
+		// If device_id is provided, get device-specific notifications
+		// First, try to parse it as a number
+		deviceID, parseErr := strconv.ParseUint(deviceIDParam, 10, 64)
+		if parseErr == nil {
+			// It's a numeric ID
+			app.InfoLog.Printf("Getting notifications by numeric device ID: %d", deviceID)
+			if unreadOnly == "true" {
+				allNotifications, err := app.Models.Notification.GetNotificationsByDeviceID(userID, uint(deviceID))
+				if err == nil {
+					notifications = []*data.Notification{}
+					for _, notification := range allNotifications {
+						if !notification.Read {
+							notifications = append(notifications, notification)
+						}
+					}
+				} else {
+					fetchErr = err
+					app.ErrorLog.Printf("Error getting notifications by device ID: %v", err)
+				}
+			} else {
+				notifications, fetchErr = app.Models.Notification.GetNotificationsByDeviceID(userID, uint(deviceID))
+				if fetchErr != nil {
+					app.ErrorLog.Printf("Error getting notifications by device ID: %v", fetchErr)
+				}
+			}
+		} else {
+			// Not a numeric ID, try matching by device name (serial number)
+			app.InfoLog.Printf("Getting notifications by device serial number: %s", deviceIDParam)
+
+			// Use our new dedicated function to get notifications by device name
+			if unreadOnly == "true" {
+				// First get all notifications for the device
+				allNotifications, err := app.Models.Notification.GetNotificationsByDeviceName(userID, deviceIDParam)
+				if err == nil {
+					// Then filter to unread only in memory
+					notifications = []*data.Notification{}
+					for _, notification := range allNotifications {
+						if !notification.Read {
+							notifications = append(notifications, notification)
+						}
+					}
+					app.InfoLog.Printf("Found %d unread notifications of %d total for device %s",
+						len(notifications), len(allNotifications), deviceIDParam)
+				} else {
+					fetchErr = err
+					app.ErrorLog.Printf("Error getting notifications by device name: %v", err)
+				}
+			} else {
+				// Get all notifications for the device
+				notifications, fetchErr = app.Models.Notification.GetNotificationsByDeviceName(userID, deviceIDParam)
+				if fetchErr != nil {
+					app.ErrorLog.Printf("Error getting notifications by device name: %v", fetchErr)
+				} else {
+					app.InfoLog.Printf("Found %d notifications for device %s", len(notifications), deviceIDParam)
+				}
+			}
+		}
 	} else {
-		notifications, fetchErr = app.Models.Notification.GetUserNotifications(userID)
+		// Get all notifications for the user
+		app.InfoLog.Printf("Getting all notifications for user %d", userID)
+		if unreadOnly == "true" {
+			notifications, fetchErr = app.Models.Notification.GetUnreadNotifications(userID)
+		} else {
+			notifications, fetchErr = app.Models.Notification.GetUserNotifications(userID)
+		}
 	}
 
 	if fetchErr != nil {
@@ -408,6 +505,29 @@ func (app *Config) DeleteNotification(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// DeleteAllNotifications deletes all notifications for a user
+func (app *Config) DeleteAllNotifications(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from JWT token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Delete all notifications for the user
+	if err := app.Models.Notification.DeleteAllNotifications(userID); err != nil {
+		app.errorJSON(w, errors.New("failed to delete all notifications"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to delete all notifications: %v", err)
+		return
+	}
+
+	// Return success
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "All notifications deleted successfully",
+	})
+}
+
 // GenerateDeviceNotifications checks device data for conditions that should create notifications
 func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from JWT token
@@ -418,48 +538,150 @@ func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get user's devices
-	devices, err := app.Models.Device.GetByUserID(userID)
-	if err != nil {
-		app.errorJSON(w, errors.New("failed to fetch devices"), http.StatusInternalServerError)
-		app.ErrorLog.Printf("Failed to fetch devices: %v", err)
+	// Get device serial number from the request - this is now required
+	deviceSerialParam := r.URL.Query().Get("serial_number")
+	if deviceSerialParam == "" {
+		app.errorJSON(w, errors.New("serial_number parameter is required"), http.StatusBadRequest)
 		return
 	}
 
-	notificationsGenerated := 0
+	// Start the notification generation process in a goroutine
+	go func() {
+		app.InfoLog.Printf("Starting notification generation for device %s, requested by user %d",
+			deviceSerialParam, userID)
+
+		// Generate notifications for the specific device
+		count, err := app.generateNotificationsForDevice(userID, deviceSerialParam)
+		if err != nil {
+			app.ErrorLog.Printf("Error generating notifications for device %s: %v", deviceSerialParam, err)
+		} else {
+			app.InfoLog.Printf("Generated %d notifications for device %s", count, deviceSerialParam)
+		}
+	}()
+
+	// Return immediate response
+	app.writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"message": "Notification generation process started for device " + deviceSerialParam,
+		"status":  "processing",
+	})
+}
+
+// Helper method to check rate limits (basic implementation)
+// In production, you would use Redis to track API call frequency
+func (app *Config) checkRateLimitForUser(userID uint) bool {
+	// TODO: Implement proper rate limiting with Redis
+	// For now, always return true to allow the call
+	return true
+}
+
+// generateNotificationsForDevice generates notifications for a specific device
+func (app *Config) generateNotificationsForDevice(userID uint, serialNumber string) (int, error) {
+	// Get the device by serial number
+	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
+	if err != nil || device == nil {
+		return 0, fmt.Errorf("device not found with serial number: %s, error: %v", serialNumber, err)
+	}
+
+	// Security check: Verify that the device belongs to the user
+	if device.UserID != userID {
+		app.ErrorLog.Printf("Security warning: User %d attempted to access device %s which belongs to user %d",
+			userID, serialNumber, device.UserID)
+		return 0, fmt.Errorf("unauthorized: device does not belong to user")
+	}
+
+	// Get logs directly by serial number
+	logs, err := app.Models.DeviceData.GetLogsBySerialNumber(serialNumber)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch logs for device %s: %v", serialNumber, err)
+	}
+
+	if len(logs) == 0 {
+		app.InfoLog.Printf("No logs found for device %s", serialNumber)
+		return 0, nil
+	}
+
+	// Process the latest log for this device
+	latestLog := logs[0]
+	app.InfoLog.Printf("Latest log for device %s: SoilMoisture=%f, SoilTemperature=%f, PH=%f",
+		serialNumber, latestLog.SoilMoisture, latestLog.SoilTemperature, latestLog.PH)
+
+	// Check conditions and create notifications
+	count := app.checkConditionsAndCreateNotifications(device, latestLog, userID)
+	return count, nil
+}
+
+// generateNotificationsForAllDevices generates notifications for all devices belonging to a user
+func (app *Config) generateNotificationsForAllDevices(userID uint) (int, int, error) {
+	// Get all user's devices
+	devices, err := app.Models.Device.GetByUserID(userID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to fetch devices: %v", err)
+	}
+
+	app.InfoLog.Printf("Checking %d devices for notification conditions", len(devices))
+	totalNotifications := 0
+	processedDevices := 0
 
 	// Check each device for conditions that would trigger notifications
 	for _, device := range devices {
-		// Get latest log for device
+		// Double-check that the device belongs to the user (defense in depth)
+		if device.UserID != userID {
+			app.ErrorLog.Printf("Security warning: Device ID=%d appears to be associated with wrong user", device.ID)
+			continue
+		}
+
+		app.InfoLog.Printf("Processing device ID=%d, SerialNumber=%s", device.ID, device.SerialNumber)
+		processedDevices++
+
+		// First try to get logs by device ID
 		logs, err := app.Models.DeviceData.GetLogsByDeviceID(device.ID)
 		if err != nil || len(logs) == 0 {
-			continue
+			app.InfoLog.Printf("No logs found by device ID for %s, trying by serial number", device.SerialNumber)
+
+			// If no logs found by ID, try by serial number
+			logs, err = app.Models.DeviceData.GetLogsBySerialNumber(device.SerialNumber)
+			if err != nil || len(logs) == 0 {
+				app.InfoLog.Printf("No logs found for device %s: %v", device.SerialNumber, err)
+				continue
+			}
 		}
 
 		// Get most recent log
 		latestLog := logs[0]
+		app.InfoLog.Printf("Latest log for device %s: SoilMoisture=%f, SoilTemperature=%f, PH=%f",
+			device.SerialNumber, latestLog.SoilMoisture, latestLog.SoilTemperature, latestLog.PH)
 
-		// Create notification for low battery (if battery < 20%)
-		if latestLog.SoilMoisture < 20 {
-			notification := data.Notification{
-				Type:       "warning",
-				Message:    fmt.Sprintf("Soil moisture is critically low (%f%%)", latestLog.SoilMoisture),
-				DeviceID:   device.ID,
-				DeviceName: device.SerialNumber,
-				UserID:     userID,
-				Read:       false,
-			}
+		// Check conditions and create notifications
+		count := app.checkConditionsAndCreateNotifications(device, latestLog, userID)
+		totalNotifications += count
+	}
 
-			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
-				notificationsGenerated++
-			}
+	return totalNotifications, processedDevices, nil
+}
+
+// Helper function to check conditions and create notifications
+func (app *Config) checkConditionsAndCreateNotifications(device *data.Device, latestLog *data.DeviceData, userID uint) int {
+	notificationsGenerated := 0
+
+	// Create notification for low soil moisture (if soil moisture < 20%)
+	if latestLog.SoilMoisture < 20 {
+		app.InfoLog.Printf("Device %s has low soil moisture (%f%%)", device.SerialNumber, latestLog.SoilMoisture)
+
+		message := fmt.Sprintf("Soil moisture is critically low (%f%%)", latestLog.SoilMoisture)
+		notificationType := "warning"
+
+		// Check if similar notification already exists
+		exists, err := app.Models.Notification.HasSimilarNotification(
+			device.ID, device.SerialNumber, userID, notificationType, message)
+
+		if err != nil {
+			app.ErrorLog.Printf("Error checking for existing notifications: %v", err)
 		}
 
-		// Check extreme temperature
-		if latestLog.SoilTemperature > 35 || latestLog.SoilTemperature < 5 {
+		if !exists {
 			notification := data.Notification{
-				Type:       "alert",
-				Message:    fmt.Sprintf("Extreme soil temperature detected: %f°C", latestLog.SoilTemperature),
+				Type:       notificationType,
+				Message:    message,
 				DeviceID:   device.ID,
 				DeviceName: device.SerialNumber,
 				UserID:     userID,
@@ -467,33 +689,89 @@ func (app *Config) GenerateDeviceNotifications(w http.ResponseWriter, r *http.Re
 			}
 
 			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
+				app.InfoLog.Printf("Created low moisture notification for device %s", device.SerialNumber)
 				notificationsGenerated++
+			} else {
+				app.ErrorLog.Printf("Failed to create notification for device %s: %v", device.SerialNumber, err)
 			}
-		}
-
-		// Check pH levels
-		if latestLog.PH < 5.5 || latestLog.PH > 7.5 {
-			notification := data.Notification{
-				Type:       "info",
-				Message:    fmt.Sprintf("pH level outside optimal range: %f", latestLog.PH),
-				DeviceID:   device.ID,
-				DeviceName: device.SerialNumber,
-				UserID:     userID,
-				Read:       false,
-			}
-
-			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
-				notificationsGenerated++
-			}
+		} else {
+			app.InfoLog.Printf("Skipping duplicate low moisture notification for device %s", device.SerialNumber)
 		}
 	}
 
-	// Return success with count of notifications generated
-	app.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message":             "Device notifications generated",
-		"notifications_count": notificationsGenerated,
-		"devices_checked":     len(devices),
-	})
+	// Check extreme temperature
+	if latestLog.SoilTemperature > 35 || latestLog.SoilTemperature < 5 {
+		app.InfoLog.Printf("Device %s has extreme soil temperature (%f°C)", device.SerialNumber, latestLog.SoilTemperature)
+
+		message := fmt.Sprintf("Extreme soil temperature detected: %f°C", latestLog.SoilTemperature)
+		notificationType := "alert"
+
+		// Check if similar notification already exists
+		exists, err := app.Models.Notification.HasSimilarNotification(
+			device.ID, device.SerialNumber, userID, notificationType, message)
+
+		if err != nil {
+			app.ErrorLog.Printf("Error checking for existing notifications: %v", err)
+		}
+
+		if !exists {
+			notification := data.Notification{
+				Type:       notificationType,
+				Message:    message,
+				DeviceID:   device.ID,
+				DeviceName: device.SerialNumber,
+				UserID:     userID,
+				Read:       false,
+			}
+
+			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
+				app.InfoLog.Printf("Created temperature notification for device %s", device.SerialNumber)
+				notificationsGenerated++
+			} else {
+				app.ErrorLog.Printf("Failed to create notification for device %s: %v", device.SerialNumber, err)
+			}
+		} else {
+			app.InfoLog.Printf("Skipping duplicate temperature notification for device %s", device.SerialNumber)
+		}
+	}
+
+	// Check pH levels
+	if latestLog.PH < 5.5 || latestLog.PH > 7.5 {
+		app.InfoLog.Printf("Device %s has pH outside optimal range (%f)", device.SerialNumber, latestLog.PH)
+
+		message := fmt.Sprintf("pH level outside optimal range: %f", latestLog.PH)
+		notificationType := "info"
+
+		// Check if similar notification already exists
+		exists, err := app.Models.Notification.HasSimilarNotification(
+			device.ID, device.SerialNumber, userID, notificationType, message)
+
+		if err != nil {
+			app.ErrorLog.Printf("Error checking for existing notifications: %v", err)
+		}
+
+		if !exists {
+			notification := data.Notification{
+				Type:       notificationType,
+				Message:    message,
+				DeviceID:   device.ID,
+				DeviceName: device.SerialNumber,
+				UserID:     userID,
+				Read:       false,
+			}
+
+			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
+				app.InfoLog.Printf("Created pH notification for device %s", device.SerialNumber)
+				notificationsGenerated++
+			} else {
+				app.ErrorLog.Printf("Failed to create notification for device %s: %v", device.SerialNumber, err)
+			}
+		} else {
+			app.InfoLog.Printf("Skipping duplicate pH notification for device %s", device.SerialNumber)
+		}
+	}
+
+	return notificationsGenerated
 }
 
 // HealthCheck is a simple health check endpoint that returns 200 OK if the service is running.

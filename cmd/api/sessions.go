@@ -21,22 +21,11 @@ func InitSession() *SessionManager {
 	// Register types that will be stored in the session
 	gob.Register(data.User{})
 
-	// Get Redis client
-	redisClient, err := NewRedisClient()
-	if err != nil {
-		// If Redis isn't available, we'll log this in main.go
-		return &SessionManager{
-			CookieName: "field_eyes_session",
-			MaxAge:     86400, // 24 hours
-			Secure:     true,
-		}
-	}
-
+	// Get Redis configuration from environment
 	return &SessionManager{
 		CookieName: "field_eyes_session",
 		MaxAge:     86400, // 24 hours
 		Secure:     true,
-		Pool:       redisClient.Pool,
 	}
 }
 

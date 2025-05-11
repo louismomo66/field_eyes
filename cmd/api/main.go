@@ -9,24 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 )
 
 const webPort = "9002"
-
-func (app *Config) serve() {
-	// Create the server with middleware for sessions
-	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", webPort),
-		Handler: app.Sessions.LoadAndSave(app.routes()),
-	}
-	app.InfoLog.Println("Starting web server...")
-	err := srv.ListenAndServe()
-	if err != nil {
-		log.Panic(err)
-	}
-}
 
 // loadEnvFile loads the environment variables from .env file
 func loadEnvFile() bool {
@@ -156,6 +144,118 @@ func main() {
 		defer mqttClient.CloseConnection()
 	}
 
-	go app.listenForErrors()
-	app.serve()
+	// Start background notification generator
+	go app.startBackgroundNotificationGenerator()
+
+	// Start the server
+	err = http.ListenAndServe(fmt.Sprintf(":%s", webPort), app.routes())
+	if err != nil {
+		app.ErrorLog.Fatal(err)
+	}
+}
+
+// startBackgroundNotificationGenerator starts a goroutine that periodically generates notifications for all devices
+func (app *Config) startBackgroundNotificationGenerator() {
+	// Define how often to check for and generate notifications (e.g., every 30 minutes)
+	notificationInterval := 1 * time.Hour // Increase to 1 hour to prevent too frequent notifications
+
+	app.InfoLog.Printf("Starting background notification generator with interval of %v", notificationInterval)
+
+	// Create a ticker that triggers at the defined interval
+	ticker := time.NewTicker(notificationInterval)
+	defer ticker.Stop()
+
+	// Run the first check immediately
+	app.checkAllDevicesForNotifications()
+
+	// Then run periodically based on the ticker
+	for range ticker.C {
+		app.checkAllDevicesForNotifications()
+	}
+}
+
+// checkAllDevicesForNotifications checks all devices for conditions that would trigger notifications
+func (app *Config) checkAllDevicesForNotifications() {
+	app.InfoLog.Println("Starting periodic notification generation for all devices")
+
+	// Get all devices from the database
+	devices, err := app.Models.Device.GetAll()
+	if err != nil {
+		app.ErrorLog.Printf("Error fetching devices for notification generation: %v", err)
+		return
+	}
+
+	app.InfoLog.Printf("Checking %d devices for notification conditions", len(devices))
+
+	// Use a channel with a reasonable buffer to control concurrent processing
+	type deviceResult struct {
+		serialNumber  string
+		notifications int
+		err           error
+	}
+
+	resultChan := make(chan deviceResult, 5)
+	activeWorkers := 0
+	maxConcurrentWorkers := 5 // Control concurrency
+
+	// Process each device concurrently with controlled concurrency
+	for _, device := range devices {
+		// Skip devices without a serial number
+		if device.SerialNumber == "" {
+			continue
+		}
+
+		// Launch worker goroutines with controlled concurrency
+		activeWorkers++
+		if activeWorkers <= maxConcurrentWorkers {
+			go func(d *data.Device) {
+				// Generate notifications for this device using its owner's user ID
+				notificationCount, err := app.generateNotificationsForDevice(d.UserID, d.SerialNumber)
+
+				// Send results through channel
+				resultChan <- deviceResult{
+					serialNumber:  d.SerialNumber,
+					notifications: notificationCount,
+					err:           err,
+				}
+			}(device)
+		} else {
+			// Wait for a worker to finish before starting a new one
+			result := <-resultChan
+			activeWorkers--
+
+			if result.err != nil {
+				app.ErrorLog.Printf("Error generating notifications for device %s: %v",
+					result.serialNumber, result.err)
+			} else {
+				app.InfoLog.Printf("Generated %d notifications for device %s",
+					result.notifications, result.serialNumber)
+			}
+
+			// Launch the next worker
+			go func(d *data.Device) {
+				notificationCount, err := app.generateNotificationsForDevice(d.UserID, d.SerialNumber)
+				resultChan <- deviceResult{
+					serialNumber:  d.SerialNumber,
+					notifications: notificationCount,
+					err:           err,
+				}
+			}(device)
+			activeWorkers++
+		}
+	}
+
+	// Collect remaining results
+	for i := 0; i < activeWorkers; i++ {
+		result := <-resultChan
+		if result.err != nil {
+			app.ErrorLog.Printf("Error generating notifications for device %s: %v",
+				result.serialNumber, result.err)
+		} else {
+			app.InfoLog.Printf("Generated %d notifications for device %s",
+				result.notifications, result.serialNumber)
+		}
+	}
+
+	app.InfoLog.Println("Completed periodic notification generation for all devices")
 }

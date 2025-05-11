@@ -2,6 +2,8 @@ package data
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,20 +24,21 @@ type Device struct {
 // DeviceData represents the data logs for a device.
 type DeviceData struct {
 	gorm.Model
-	DeviceID        uint      `gorm:"not null" json:"device_id"` // Foreign key to the Device table
-	SerialNumber    string    `gorm:"not null" json:"serial_number"`
-	Temperature     float64   `json:"temperature"`
-	Humidity        float64   `json:"humidity"`
-	Nitrogen        float64   `json:"nitrogen"`
-	Phosphorous     float64   `json:"phosphorous"`
-	Potassium       float64   `json:"potassium"`
-	PH              float64   `json:"ph"`
-	SoilMoisture    float64   `json:"soil_moisture"`
-	SoilTemperature float64   `json:"soil_temperature"`
-	SoilHumidity    float64   `json:"soil_humidity"`
-	Longitude       float64   `json:"longitude"`
-	Latitude        float64   `json:"latitude"`
-	CreatedAt       time.Time `json:"created_at"`
+	DeviceID               uint      `gorm:"not null" json:"device_id"` // Foreign key to the Device table
+	SerialNumber           string    `gorm:"not null" json:"serial_number"`
+	Temperature            float64   `json:"temperature"`
+	Humidity               float64   `json:"humidity"`
+	Nitrogen               float64   `json:"nitrogen"`
+	Phosphorous            float64   `json:"phosphorous"`
+	Potassium              float64   `json:"potassium"`
+	PH                     float64   `json:"ph"`
+	SoilMoisture           float64   `json:"soil_moisture"`
+	SoilTemperature        float64   `json:"soil_temperature"`
+	SoilHumidity           float64   `json:"soil_humidity"`
+	ElectricalConductivity float64   `json:"electrical_conductivity"`
+	Longitude              float64   `json:"longitude"`
+	Latitude               float64   `json:"latitude"`
+	CreatedAt              time.Time `json:"created_at"`
 }
 
 // Notification represents a notification in the database
@@ -216,4 +219,113 @@ func (r *NotificationRepository) MarkAllAsRead(userID uint) error {
 // DeleteNotification deletes a notification by its ID
 func (r *NotificationRepository) DeleteNotification(id uint) error {
 	return r.db.Delete(&Notification{}, id).Error
+}
+
+// DeleteAllNotifications deletes all notifications for a user
+func (r *NotificationRepository) DeleteAllNotifications(userID uint) error {
+	return r.db.Where("user_id = ?", userID).Delete(&Notification{}).Error
+}
+
+// DeleteByID deletes a device by its ID
+func (r *DeviceRepository) DeleteByID(id uint) error {
+	return r.db.Delete(&Device{}, id).Error
+}
+
+// DeleteByDeviceID deletes all device data records for a specific device
+func (r *DeviceDataRepository) DeleteByDeviceID(deviceID uint) error {
+	return r.db.Where("device_id = ?", deviceID).Delete(&DeviceData{}).Error
+}
+
+// GetNotificationsByDeviceID retrieves all notifications for a specific device
+func (r *NotificationRepository) GetNotificationsByDeviceID(userID uint, deviceID uint) ([]*Notification, error) {
+	var notifications []*Notification
+	result := r.db.Where("user_id = ? AND device_id = ?", userID, deviceID).Order("created_at DESC").Find(&notifications)
+	return notifications, result.Error
+}
+
+// GetNotificationsByDeviceName retrieves all notifications for a specific device by its name/serial number
+func (r *NotificationRepository) GetNotificationsByDeviceName(userID uint, deviceName string) ([]*Notification, error) {
+	var notifications []*Notification
+
+	// Enable query logging for this query
+	tx := r.db.Debug().Where("user_id = ? AND device_name = ?", userID, deviceName).Order("created_at DESC")
+
+	// Execute the query
+	result := tx.Find(&notifications)
+
+	// Log the count of notifications found
+	fmt.Printf("Found %d notifications for device name '%s' and user_id '%d'\n",
+		len(notifications), deviceName, userID)
+
+	return notifications, result.Error
+}
+
+// HasSimilarNotification checks if a similar notification was recently created
+// to prevent duplicate notifications for the same condition
+func (r *NotificationRepository) HasSimilarNotification(deviceID uint, deviceName string, userID uint, notificationType string, message string) (bool, error) {
+	var count int64
+
+	// For soil moisture notifications, use a longer time window of 6 hours
+	var timeWindow time.Duration
+	if strings.Contains(message, "Soil moisture is critically low") {
+		timeWindow = 6 * time.Hour
+	} else {
+		timeWindow = 1 * time.Hour
+	}
+
+	timeAgo := time.Now().Add(-1 * timeWindow)
+
+	// First check for exact message match
+	result := r.db.Model(&Notification{}).
+		Where("device_id = ? AND device_name = ? AND user_id = ? AND type = ? AND message = ? AND created_at > ?",
+			deviceID, deviceName, userID, notificationType, message, timeAgo).
+		Count(&count)
+
+	if count > 0 || result.Error != nil {
+		return count > 0, result.Error
+	}
+
+	// For soil moisture notifications, use a more specific pattern match
+	if strings.Contains(message, "Soil moisture is critically low") {
+		// Extract just the prefix to match any soil moisture notification regardless of exact percentage
+		var similarCount int64
+		result = r.db.Model(&Notification{}).
+			Where("device_id = ? AND device_name = ? AND user_id = ? AND type = ? AND message LIKE ? AND created_at > ?",
+				deviceID, deviceName, userID, notificationType, "Soil moisture is critically low%", timeAgo).
+			Count(&similarCount)
+
+		return similarCount > 0, result.Error
+	}
+
+	// For pH notifications
+	if strings.Contains(message, "pH level outside optimal range") {
+		var similarCount int64
+		result = r.db.Model(&Notification{}).
+			Where("device_id = ? AND device_name = ? AND user_id = ? AND type = ? AND message LIKE ? AND created_at > ?",
+				deviceID, deviceName, userID, notificationType, "pH level outside optimal range%", timeAgo).
+			Count(&similarCount)
+
+		return similarCount > 0, result.Error
+	}
+
+	// For temperature notifications
+	if strings.Contains(message, "Temperature is") {
+		var similarCount int64
+		result = r.db.Model(&Notification{}).
+			Where("device_id = ? AND device_name = ? AND user_id = ? AND type = ? AND message LIKE ? AND created_at > ?",
+				deviceID, deviceName, userID, notificationType, "Temperature is%", timeAgo).
+			Count(&similarCount)
+
+		return similarCount > 0, result.Error
+	}
+
+	// For other notification types, check if there's any notification of the same type
+	// for the same device in the last hour
+	var otherCount int64
+	result = r.db.Model(&Notification{}).
+		Where("device_id = ? AND device_name = ? AND user_id = ? AND type = ? AND created_at > ?",
+			deviceID, deviceName, userID, notificationType, timeAgo).
+		Count(&otherCount)
+
+	return otherCount > 0, result.Error
 }
