@@ -1,52 +1,30 @@
-# Use an official Go runtime as a base
-FROM golang:1.23.2 as builder
+FROM golang:1.22-alpine AS builder
 
-# Set the working directory inside the container
 WORKDIR /app
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
-# Download all dependencies
+# Download dependencies
 RUN go mod download
 
-# Copy the local package files to the container's workspace
+# Copy source code
 COPY . .
 
-# Install godotenv to manage .env files
-RUN go get github.com/joho/godotenv
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -o field_eyes_api ./cmd/api
 
-# Install wget for health checks
-RUN apt-get update && apt-get install -y wget
-
-# Build the application (using the target platform's architecture)
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o field_eyes_api ./cmd/api
-
-# Use a lightweight Alpine image
+# Use a smaller image for the final container
 FROM alpine:latest
 
-# Install ca-certificates and wget for health checks
-RUN apk --no-cache add ca-certificates wget
-
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the pre-built binary file from the previous stage
+# Copy the binary and necessary files from builder
 COPY --from=builder /app/field_eyes_api .
+COPY --from=builder /app/.env .env
 
-# Create empty .env file
-RUN touch .env
-
-# Set default environment variables
-ENV DB_HOST=localhost
-ENV DB_PORT=5432
-ENV DB_USER=postgres
-ENV DB_PASSWORD=postgres123456
-ENV DB_NAME=field_eyes
-ENV DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable"
-
-# Expose port
+# Expose the port
 EXPOSE 9002
 
-# Command to run the executable
-CMD ["./field_eyes_api"] 
+# Run the application
+CMD ["./field_eyes_api"]

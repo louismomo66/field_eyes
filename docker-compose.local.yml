@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123456
+      POSTGRES_DB: field_eyes
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1884:1883"  # Changed from 1883 to 1884 on host
+      - "9002:9001"  # Changed from 9001 to 9002 on host
+    volumes:
+      - mqtt_config:/mosquitto/config
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+    command: sh -c "echo 'listener 1883\nallow_anonymous true' > /mosquitto/config/mosquitto.conf && /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"
+
+volumes:
+  postgres_data:
+  redis_data:
+  mqtt_data:
+  mqtt_log:
+  mqtt_config:
