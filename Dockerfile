@@ -19,9 +19,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Copy the binary and necessary files from builder
+# Copy the binary from builder
 COPY --from=builder /app/field_eyes_api .
-COPY --from=builder /app/.env .env
 
 # Expose the port
 EXPOSE 9002

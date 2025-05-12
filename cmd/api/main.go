@@ -14,7 +14,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const webPort = "9002"
+const webPort = "9003"
 
 // loadEnvFile loads the environment variables from .env file
 func loadEnvFile() bool {
