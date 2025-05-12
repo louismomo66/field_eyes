@@ -84,9 +84,8 @@ func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if request.Email == "" || request.Password == "" {
-		app.errorJSON(w, errors.New("email and password are required"), http.StatusBadRequest)
+		app.errorJSON(w, errors.New("email and password required"), http.StatusBadRequest)
 		app.ErrorLog.Println("email and password are empty")
 		return
 	}
@@ -95,6 +94,13 @@ func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		app.errorJSON(w, errors.New("invalid credentials"), http.StatusBadRequest)
 		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Add null check here to prevent panic
+	if user == nil {
+		app.errorJSON(w, errors.New("invalid credentials"), http.StatusBadRequest)
+		app.ErrorLog.Println("user not found")
 		return
 	}
 
