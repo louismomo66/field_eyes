@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"field_eyes/data"
 	"field_eyes/pkg/email"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 const webPort = "9002"
@@ -123,6 +125,14 @@ func main() {
 
 	// Initialize data models
 	app.Models = data.New(db)
+
+	// Ensure system user exists for device auto-registration
+	if err := app.ensureSystemUserExists(); err != nil {
+		app.ErrorLog.Printf("Warning: Failed to create system user: %v", err)
+		app.ErrorLog.Println("Auto-registration of devices may not work properly")
+	} else {
+		app.InfoLog.Println("System user verified")
+	}
 
 	// Initialize MQTT client
 	mqttClient, err := NewMQTTClient(&app)
@@ -258,4 +268,40 @@ func (app *Config) checkAllDevicesForNotifications() {
 	}
 
 	app.InfoLog.Println("Completed periodic notification generation for all devices")
+}
+
+// ensureSystemUserExists ensures that a system user exists for device auto-registration
+func (app *Config) ensureSystemUserExists() error {
+	// Define the system user - using ID 1 since auto-increment typically starts at 1
+	systemUser := &data.User{
+		Username: "system",
+		Email:    "system@fieldeyes.internal", // Use a special internal email that won't conflict with real users
+		Password: "notaccessible",             // This user should never be logged into
+		Role:     "system",
+	}
+
+	// Check if the system user already exists
+	existingUser, err := app.Models.User.GetByEmail(systemUser.Email)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check if system user exists: %w", err)
+	}
+
+	// If the user already exists, we're good
+	if existingUser != nil {
+		app.InfoLog.Printf("System user already exists with ID: %d", existingUser.ID)
+		return nil
+	}
+
+	// Create the system user
+	app.InfoLog.Println("Creating system user for device auto-registration")
+	systemUser.TempPassword = systemUser.Password // Needed for the Insert function which expects the password in TempPassword
+
+	// Insert the system user - the ID will be assigned by the database
+	systemID, err := app.Models.User.Insert(systemUser)
+	if err != nil {
+		return fmt.Errorf("failed to create system user: %w", err)
+	}
+
+	app.InfoLog.Printf("System user created with ID: %d", systemID)
+	return nil
 }

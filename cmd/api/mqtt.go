@@ -147,11 +147,17 @@ func (m *MQTTClient) processDeviceData(logEntry *data.DeviceData) error {
 	// Check if the device exists
 	device, err := m.app.Models.Device.GetBySerialNumber(logEntry.SerialNumber)
 	if err != nil {
+		// Get system user for auto-registration
+		systemUser, err := m.app.Models.User.GetByEmail("system@fieldeyes.internal")
+		if err != nil || systemUser == nil {
+			return fmt.Errorf("failed to get system user for auto-registration: %v", err)
+		}
+
 		// Auto-register the device without assigning to a user
 		device = &data.Device{
 			DeviceType:   "auto_registered",
 			SerialNumber: logEntry.SerialNumber,
-			UserID:       0, // Assign to system user (ID 0) so it shows up as unclaimed but avoids FK constraint
+			UserID:       systemUser.ID, // Assign to system user so it shows up as unclaimed
 		}
 		if err := m.app.Models.Device.CreateDevice(device); err != nil {
 			return fmt.Errorf("failed to auto-register device: %v", err)

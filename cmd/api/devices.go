@@ -157,14 +157,22 @@ func (app *Config) LogDeviceData(w http.ResponseWriter, r *http.Request) {
 		// Device doesn't exist, auto-register it
 		app.InfoLog.Printf("Device with serial number %s not found, auto-registering", logEntry.SerialNumber)
 
+		// Get system user for auto-registration
+		systemUser, err := app.Models.User.GetByEmail("system@fieldeyes.internal")
+		if err != nil || systemUser == nil {
+			app.errorJSON(w, errors.New("failed to get system user for auto-registration"), http.StatusInternalServerError)
+			app.ErrorLog.Printf("Failed to get system user for auto-registration: %v", err)
+			return
+		}
+
 		// Create new device with system user association
 		newDevice := data.Device{
 			DeviceType:   "auto_registered", // Default device type
 			SerialNumber: logEntry.SerialNumber,
-			UserID:       0, // Assign to system user (ID 0) so it shows up as unclaimed but avoids FK constraint
+			UserID:       systemUser.ID, // Assign to system user so it shows up as unclaimed
 		}
 
-		// Save device without assigning to a user
+		// Save device
 		if err := app.Models.Device.CreateDevice(&newDevice); err != nil {
 			app.errorJSON(w, errors.New("failed to auto-register device"), http.StatusInternalServerError)
 			app.ErrorLog.Printf("Failed to auto-register device: %v", err)
@@ -569,8 +577,16 @@ func (app *Config) ClaimDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get system user for checking if device is unclaimed
+	systemUser, err := app.Models.User.GetByEmail("system@fieldeyes.internal")
+	if err != nil || systemUser == nil {
+		app.errorJSON(w, errors.New("failed to verify if device is claimable"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to get system user: %v", err)
+		return
+	}
+
 	// Check if device is already claimed
-	if device.UserID != 0 {
+	if device.UserID != systemUser.ID {
 		// If already claimed by this user, return success
 		if device.UserID == userID {
 			app.writeJSON(w, http.StatusOK, map[string]string{
