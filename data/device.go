@@ -143,10 +143,6 @@ func (r *DeviceRepository) GetByUserID(userID uint) ([]*Device, error) {
 }
 
 func (r *DeviceRepository) CreateDevice(device *Device) error {
-	// If UserID is 0, ensure it's stored as NULL in the database
-	if device.UserID == 0 {
-		return r.db.Omit("UserID").Create(device).Error
-	}
 	return r.db.Create(device).Error
 }
 
@@ -187,7 +183,7 @@ func (r *DeviceRepository) Update(device *Device) error {
 // GetUnclaimedDevices retrieves all devices that haven't been claimed by any user
 func (r *DeviceRepository) GetUnclaimedDevices() ([]*Device, error) {
 	var devices []*Device
-	result := r.db.Where("user_id IS NULL OR user_id = 0").Find(&devices)
+	result := r.db.Where("user_id = ?", 1).Find(&devices)
 	return devices, result.Error
 }
 
