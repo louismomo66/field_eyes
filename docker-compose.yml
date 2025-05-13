@@ -14,7 +14,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MQTT_BROKER=mqtt
-      - MQTT_PORT=1883
+      - MQTT_PORT=1884
       - MQTT_USERNAME=
       - MQTT_PASSWORD=
       - MQTT_CLIENT_ID=field_eyes_server
@@ -57,11 +57,11 @@ services:
   mqtt:
     image: 'eclipse-mosquitto:2'
     restart: always
-    command: sh -c "echo 'listener 1883\nallow_anonymous true' > /mosquitto/config/mosquitto.conf && /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"
     ports:
-      - "1883:1883"  # Map to host port 1883
+      - "1884:1883"  # Map to host port 1883
       - "9001:9001"  # For MQTT WebSockets
     volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mqtt_data:/mosquitto/data
       - mqtt_log:/mosquitto/log
 

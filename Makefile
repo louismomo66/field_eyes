@@ -6,7 +6,6 @@ help:
 	@echo "Available commands:"
 	@echo "  make build         - Build the API binary"
 	@echo "  make run           - Run the API locally"
-	@echo "  make run-local     - Run the API locally with local environment"
 	@echo "  make stop          - Stop the local API and release the port"
 	@echo "  make docker-build  - Build the Docker image"
 	@echo "  make up            - Start all Docker containers"
@@ -16,7 +15,6 @@ help:
 	@echo "  make test          - Run tests"
 	@echo "  make migrate       - Run database migrations"
 	@echo "  make deploy        - Build and deploy to cloud platform"
-	@echo "  make run-docker-services - Start Docker services and run the API"
 
 # Build the API binary to the correct location expected by Docker
 .PHONY: build
@@ -29,26 +27,10 @@ build:
 # Run the API locally
 .PHONY: run
 run:
+	@echo "Checking if Docker services are running..."
+	@docker ps | grep -q field_eyes-postgres-1 || (echo "Starting Docker services first..." && docker compose up -d postgres redis mqtt && sleep 5)
 	@echo "Running API locally..."
-	go run ./cmd/api
-
-# Run the API with Docker services
-.PHONY: run-docker-services
-run-docker-services:
-	@echo "Starting Docker services..."
-	docker compose down -v
-	docker compose up -d postgres redis mqtt
-	@echo "Waiting for services to be ready..."
-	sleep 5
-	@echo "Running API with Docker services..."
-	DB_HOST=localhost DB_PORT=5432 REDIS_HOST=localhost MQTT_BROKER=localhost DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable" go run ./cmd/api
-
-# Run the API locally with local environment settings
-.PHONY: run-local
-run-local:
-	@echo "Running API locally with local environment..."
-	cp .env.local .env
-	go run ./cmd/api
+	DB_HOST=localhost DB_PORT=5432 REDIS_HOST=localhost MQTT_BROKER=localhost MQTT_PORT=1884 DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable" go run ./cmd/api
 
 # Build Docker image for development
 .PHONY: docker-build
@@ -123,5 +105,5 @@ dev-stop: down
 stop:
 	@echo "Stopping local API and releasing port..."
 	@-pkill -f "field_eyes_api" || true
-	@-lsof -ti:9004 | xargs kill -9 2>/dev/null || true
-	@echo "Port 9004 released"
+	@-lsof -ti:9002 | xargs kill -9 2>/dev/null || true
+	@echo "Port 9002 released"
