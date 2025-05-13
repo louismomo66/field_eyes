@@ -157,11 +157,11 @@ func (app *Config) LogDeviceData(w http.ResponseWriter, r *http.Request) {
 		// Device doesn't exist, auto-register it
 		app.InfoLog.Printf("Device with serial number %s not found, auto-registering", logEntry.SerialNumber)
 
-		// Create new device with no user association
+		// Create new device with system user association
 		newDevice := data.Device{
 			DeviceType:   "auto_registered", // Default device type
 			SerialNumber: logEntry.SerialNumber,
-			UserID:       1, // Assign to system user (ID 1) as devices require a valid user_id
+			UserID:       0, // Assign to system user (ID 0) so it shows up as unclaimed but avoids FK constraint
 		}
 
 		// Save device without assigning to a user

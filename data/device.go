@@ -143,6 +143,30 @@ func (r *DeviceRepository) GetByUserID(userID uint) ([]*Device, error) {
 }
 
 func (r *DeviceRepository) CreateDevice(device *Device) error {
+	// For system user (ID 0), use raw SQL to bypass GORM's foreign key validation
+	if device.UserID == 0 {
+		// Get the next available ID from the devices table
+		var nextID uint
+		if err := r.db.Raw("SELECT COALESCE(MAX(id) + 1, 1) FROM devices").Scan(&nextID).Error; err != nil {
+			return err
+		}
+
+		// Prepare the device for insert
+		now := time.Now()
+		device.ID = nextID
+		device.CreatedAt = now
+		device.UpdatedAt = now
+
+		// Insert directly with raw SQL to bypass foreign key checks
+		result := r.db.Exec(`
+			INSERT INTO devices (id, created_at, updated_at, deleted_at, device_type, serial_number, user_id)
+			VALUES (?, ?, ?, NULL, ?, ?, ?)
+		`, device.ID, device.CreatedAt, device.UpdatedAt, device.DeviceType, device.SerialNumber, 0)
+
+		return result.Error
+	}
+
+	// Normal case: use GORM's Create method
 	return r.db.Create(device).Error
 }
 
@@ -183,7 +207,8 @@ func (r *DeviceRepository) Update(device *Device) error {
 // GetUnclaimedDevices retrieves all devices that haven't been claimed by any user
 func (r *DeviceRepository) GetUnclaimedDevices() ([]*Device, error) {
 	var devices []*Device
-	result := r.db.Where("user_id = ?", 1).Find(&devices)
+	// Only return devices that are assigned to the system user (user ID 0)
+	result := r.db.Where("user_id = ?", 0).Find(&devices)
 	return devices, result.Error
 }
 
