@@ -147,10 +147,11 @@ func (m *MQTTClient) processDeviceData(logEntry *data.DeviceData) error {
 	// Check if the device exists
 	device, err := m.app.Models.Device.GetBySerialNumber(logEntry.SerialNumber)
 	if err != nil {
-		// Auto-register the device
+		// Auto-register the device without assigning to a user
 		device = &data.Device{
 			DeviceType:   "auto_registered",
 			SerialNumber: logEntry.SerialNumber,
+			// No UserID field - it will remain NULL
 		}
 		if err := m.app.Models.Device.CreateDevice(device); err != nil {
 			return fmt.Errorf("failed to auto-register device: %v", err)

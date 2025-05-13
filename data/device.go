@@ -14,7 +14,7 @@ type Device struct {
 	gorm.Model
 	DeviceType   string         `gorm:"type:varchar(100);not null" json:"device_type"`
 	SerialNumber string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"serial_number"`
-	UserID       uint           `gorm:"not null" json:"user_id"`
+	UserID       uint           `json:"user_id"`
 	User         User           `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
@@ -183,7 +183,7 @@ func (r *DeviceRepository) Update(device *Device) error {
 // GetUnclaimedDevices retrieves all devices that haven't been claimed by any user
 func (r *DeviceRepository) GetUnclaimedDevices() ([]*Device, error) {
 	var devices []*Device
-	result := r.db.Where("user_id = 0").Find(&devices)
+	result := r.db.Where("user_id IS NULL OR user_id = 0").Find(&devices)
 	return devices, result.Error
 }
 
