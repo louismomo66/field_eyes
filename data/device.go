@@ -143,6 +143,10 @@ func (r *DeviceRepository) GetByUserID(userID uint) ([]*Device, error) {
 }
 
 func (r *DeviceRepository) CreateDevice(device *Device) error {
+	// If UserID is 0, ensure it's stored as NULL in the database
+	if device.UserID == 0 {
+		return r.db.Omit("UserID").Create(device).Error
+	}
 	return r.db.Create(device).Error
 }
 

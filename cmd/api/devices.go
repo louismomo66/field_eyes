@@ -161,7 +161,7 @@ func (app *Config) LogDeviceData(w http.ResponseWriter, r *http.Request) {
 		newDevice := data.Device{
 			DeviceType:   "auto_registered", // Default device type
 			SerialNumber: logEntry.SerialNumber,
-			// UserID is intentionally not set, so it will remain NULL in the database
+			// UserID is intentionally left at default zero value for NULL in database
 		}
 
 		// Save device without assigning to a user

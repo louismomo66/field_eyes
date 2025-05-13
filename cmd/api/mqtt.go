@@ -151,7 +151,7 @@ func (m *MQTTClient) processDeviceData(logEntry *data.DeviceData) error {
 		device = &data.Device{
 			DeviceType:   "auto_registered",
 			SerialNumber: logEntry.SerialNumber,
-			// No UserID field - it will remain NULL
+			UserID:       0, // This will be stored as NULL in the database due to foreign key constraint
 		}
 		if err := m.app.Models.Device.CreateDevice(device); err != nil {
 			return fmt.Errorf("failed to auto-register device: %v", err)
