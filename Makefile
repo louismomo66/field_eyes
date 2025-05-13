@@ -16,6 +16,7 @@ help:
 	@echo "  make test          - Run tests"
 	@echo "  make migrate       - Run database migrations"
 	@echo "  make deploy        - Build and deploy to cloud platform"
+	@echo "  make run-docker-services - Start Docker services and run the API"
 
 # Build the API binary to the correct location expected by Docker
 .PHONY: build
@@ -30,6 +31,17 @@ build:
 run:
 	@echo "Running API locally..."
 	go run ./cmd/api
+
+# Run the API with Docker services
+.PHONY: run-docker-services
+run-docker-services:
+	@echo "Starting Docker services..."
+	docker compose down -v
+	docker compose up -d postgres redis mqtt
+	@echo "Waiting for services to be ready..."
+	sleep 5
+	@echo "Running API with Docker services..."
+	DB_HOST=localhost DB_PORT=5432 REDIS_HOST=localhost MQTT_BROKER=localhost DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable" go run ./cmd/api
 
 # Run the API locally with local environment settings
 .PHONY: run-local

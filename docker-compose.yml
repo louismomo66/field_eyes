@@ -41,12 +41,16 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123456
       POSTGRES_DB: field_eyes
+    ports:
+      - "5432:5432"  # Map to host port 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: 'redis:7'
     restart: always
+    ports:
+      - "6379:6379"  # Map to host port 6379
     volumes:
       - redis_data:/data
 
@@ -55,7 +59,7 @@ services:
     restart: always
     command: sh -c "echo 'listener 1883\nallow_anonymous true' > /mosquitto/config/mosquitto.conf && /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"
     ports:
-      - "1883:1883"
+      - "1883:1883"  # Map to host port 1883
       - "9001:9001"  # For MQTT WebSockets
     volumes:
       - mqtt_data:/mosquitto/data
