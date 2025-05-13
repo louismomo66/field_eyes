@@ -54,6 +54,9 @@ services:
     image: 'eclipse-mosquitto:2'
     restart: always
     command: sh -c "echo 'listener 1883\nallow_anonymous true' > /mosquitto/config/mosquitto.conf && /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"
+    ports:
+      - "1883:1883"
+      - "9001:9001"  # For MQTT WebSockets
     volumes:
       - mqtt_data:/mosquitto/data
       - mqtt_log:/mosquitto/log
