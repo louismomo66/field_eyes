@@ -26,7 +26,7 @@ services:
     image: eclipse-mosquitto:2
     ports:
       - "1884:1883"  # Changed from 1883 to 1884 on host
-      - "9002:9001"  # Changed from 9001 to 9002 on host
+      - "9003:9001"  # Changed from 9001 to 9002 on host
     volumes:
       - mqtt_config:/mosquitto/config
       - mqtt_data:/mosquitto/data
