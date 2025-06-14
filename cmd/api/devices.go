@@ -467,12 +467,11 @@ func (app *Config) AnalyzeDeviceData(w http.ResponseWriter, r *http.Request) {
 
 			// Add electrical conductivity analysis
 			avgEC := calculateAverage(logs, func(l *data.DeviceData) float64 { return l.ElectricalConductivity })
-			result.Predictions["optimal_ec"] = 1.0
-			result.Trends["electrical_conductivity"] = "stable"
+			result.Predictions["optimal_ec"] = 500 // Changed from 1.0 to 500 µS/cm
 
-			if avgEC < 0.5 {
+			if avgEC < 200 {
 				result.Recommendations = append(result.Recommendations, "Low electrical conductivity detected, soil may have insufficient nutrients")
-			} else if avgEC > 1.5 {
+			} else if avgEC > 800 {
 				result.Recommendations = append(result.Recommendations, "High electrical conductivity detected, consider reducing fertilizer application")
 			}
 
@@ -555,6 +554,7 @@ func (app *Config) ClaimDevice(w http.ResponseWriter, r *http.Request) {
 	// Parse the request
 	var request struct {
 		SerialNumber string `json:"serial_number"`
+		Name         string `json:"name"`
 	}
 
 	if err := app.ReadJSON(w, r, &request); err != nil {
@@ -593,6 +593,7 @@ func (app *Config) ClaimDevice(w http.ResponseWriter, r *http.Request) {
 				"message":       "device is already registered to your account",
 				"device_id":     fmt.Sprintf("%d", device.ID),
 				"serial_number": device.SerialNumber,
+				"name":          device.Name,
 			})
 			return
 		}
@@ -602,8 +603,11 @@ func (app *Config) ClaimDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update the device with the user ID
+	// Update the device with the user ID and name
 	device.UserID = userID
+	if request.Name != "" {
+		device.Name = request.Name
+	}
 
 	// Perform update in the database
 	if err := app.Models.Device.Update(device); err != nil {
@@ -627,6 +631,7 @@ func (app *Config) ClaimDevice(w http.ResponseWriter, r *http.Request) {
 		"device_id":     fmt.Sprintf("%d", device.ID),
 		"serial_number": device.SerialNumber,
 		"device_type":   device.DeviceType,
+		"name":          device.Name,
 	})
 }
 
@@ -808,5 +813,74 @@ func (app *Config) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 	// Return success response
 	app.writeJSON(w, http.StatusOK, map[string]string{
 		"message": fmt.Sprintf("device %s successfully deleted", serialNumber),
+	})
+}
+
+// UpdateDeviceName updates the name of a device
+func (app *Config) UpdateDeviceName(w http.ResponseWriter, r *http.Request) {
+	// Extract user information from the token
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Parse request
+	var request struct {
+		SerialNumber string `json:"serial_number"`
+		Name         string `json:"name"`
+	}
+
+	if err := app.ReadJSON(w, r, &request); err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	// Validate required fields
+	if request.SerialNumber == "" {
+		app.errorJSON(w, errors.New("serial number is required"), http.StatusBadRequest)
+		return
+	}
+
+	// Get the device
+	device, err := app.Models.Device.GetBySerialNumber(request.SerialNumber)
+	if err != nil || device == nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		return
+	}
+
+	// Verify ownership
+	if device.UserID != userID {
+		app.errorJSON(w, errors.New("unauthorized: device does not belong to the user"), http.StatusUnauthorized)
+		return
+	}
+
+	// Update the device name
+	device.Name = request.Name
+
+	// Save the changes
+	if err := app.Models.Device.Update(device); err != nil {
+		app.errorJSON(w, errors.New("failed to update device name"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("Failed to update device name: %v", err)
+		return
+	}
+
+	// Invalidate cache if Redis is available
+	if app.Redis != nil {
+		go func(userID uint) {
+			if err := app.Redis.InvalidateUserDevicesCache(userID); err != nil {
+				app.ErrorLog.Printf("Failed to invalidate user devices cache: %v", err)
+			}
+		}(userID)
+	}
+
+	// Return success
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message":       "device name updated successfully",
+		"device_id":     fmt.Sprintf("%d", device.ID),
+		"serial_number": device.SerialNumber,
+		"name":          device.Name,
 	})
 }

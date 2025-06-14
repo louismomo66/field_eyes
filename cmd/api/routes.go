@@ -38,6 +38,7 @@ func (app *Config) routes() http.Handler {
 			r.Get("/user-devices", app.GetUserDevices)           // Endpoint to fetch user's devices
 			r.Get("/latest-device-log", app.GetLatestDeviceLog)  // Endpoint to fetch only the latest log for a device
 			r.Delete("/delete-device", app.DeleteDevice)         // Endpoint to delete a device by serial number
+			r.Put("/update-device-name", app.UpdateDeviceName)   // New endpoint for updating device name
 
 			// Analysis endpoints
 			r.Get("/analyze-device", app.AnalyzeDeviceData)                       // Endpoint for ML analysis of device data

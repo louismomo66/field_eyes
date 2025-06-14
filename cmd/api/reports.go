@@ -105,7 +105,7 @@ func (app *Config) GenerateBasicSoilAnalysis(w http.ResponseWriter, r *http.Requ
 			calculateParameterStats(filteredLogs, "Phosphorous", "mg/kg", 20, 40),
 			calculateParameterStats(filteredLogs, "Potassium", "mg/kg", 150, 250),
 			calculateParameterStats(filteredLogs, "Soil Moisture", "%", 20, 60),
-			calculateParameterStats(filteredLogs, "Electrical Conductivity", "dS/m", 0.8, 1.5),
+			calculateParameterStats(filteredLogs, "Electrical Conductivity", "µS/cm", 200, 800),
 		},
 	}
 
