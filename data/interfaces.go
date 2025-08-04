@@ -1,5 +1,7 @@
 package data
 
+import "time"
+
 // UserInterface defines the methods that must be implemented by a User repository
 type UserInterface interface {
 	GetAll() ([]*User, error)
@@ -35,6 +37,7 @@ type DeviceInterface interface {
 type DeviceDataInterface interface {
 	CreateLog(data *DeviceData) error
 	GetLogsByDeviceID(deviceID uint) ([]*DeviceData, error)
+	GetLogsByDeviceIDWithDateRange(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error)
 	GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error)
 	DeleteByDeviceID(deviceID uint) error
 }

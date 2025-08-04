@@ -251,6 +251,32 @@ func (app *Config) GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get date range parameters
+	startDateStr := r.URL.Query().Get("start_date")
+	endDateStr := r.URL.Query().Get("end_date")
+
+	var startDate, endDate time.Time
+
+	if startDateStr != "" {
+		parsedStartDate, err := time.Parse(time.RFC3339, startDateStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("invalid start_date format"), http.StatusBadRequest)
+			app.ErrorLog.Println("invalid start_date format:", err)
+			return
+		}
+		startDate = parsedStartDate
+	}
+
+	if endDateStr != "" {
+		parsedEndDate, err := time.Parse(time.RFC3339, endDateStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("invalid end_date format"), http.StatusBadRequest)
+			app.ErrorLog.Println("invalid end_date format:", err)
+			return
+		}
+		endDate = parsedEndDate
+	}
+
 	// Validate that the device exists and belongs to the user
 	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
 	if err != nil {
@@ -302,7 +328,14 @@ func (app *Config) GetDeviceLogs(w http.ResponseWriter, r *http.Request) {
 	// If not found in cache, retrieve from database
 	if !cacheHit {
 		app.InfoLog.Printf("Cache miss for device logs: %s (ID: %d)", serialNumber, device.ID)
-		logs, err = app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+
+		// Use date range if provided, otherwise get all logs
+		if !startDate.IsZero() && !endDate.IsZero() {
+			logs, err = app.Models.DeviceData.GetLogsByDeviceIDWithDateRange(device.ID, startDate, endDate)
+		} else {
+			logs, err = app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+		}
+
 		if err != nil {
 			app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
 			app.ErrorLog.Println("failed to retrieve device logs:", err)

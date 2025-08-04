@@ -168,6 +168,13 @@ func (r *DeviceDataRepository) GetLogsByDeviceID(deviceID uint) ([]*DeviceData, 
 	return logs, result.Error
 }
 
+// GetLogsByDeviceIDWithDateRange retrieves logs for a specific device within a date range
+func (r *DeviceDataRepository) GetLogsByDeviceIDWithDateRange(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error) {
+	var logs []*DeviceData
+	result := r.db.Where("device_id = ? AND created_at >= ? AND created_at <= ?", deviceID, startDate, endDate).Order("created_at DESC").Find(&logs)
+	return logs, result.Error
+}
+
 // GetLogsBySerialNumber retrieves all logs for a specific device using its SerialNumber.
 func (r *DeviceDataRepository) GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error) {
 	var logs []*DeviceData
