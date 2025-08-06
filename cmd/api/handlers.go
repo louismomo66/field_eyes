@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -24,12 +25,18 @@ func (app *Config) Signup(w http.ResponseWriter, r *http.Request) {
 	// Restore the body for further reading
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	var user data.User
-	if err := app.ReadJSON(w, r, &user); err != nil {
+	var requestData struct {
+		data.User
+		AdminCode string `json:"admin_code,omitempty"`
+	}
+
+	if err := app.ReadJSON(w, r, &requestData); err != nil {
 		app.errorJSON(w, err, http.StatusBadRequest)
 		app.ErrorLog.Println(err)
 		return
 	}
+
+	user := requestData.User
 
 	// Log the parsed user data
 	app.InfoLog.Printf("Parsed user data: username=%s, email=%s, password=%s", user.Username, user.Email, user.TempPassword)
@@ -39,6 +46,21 @@ func (app *Config) Signup(w http.ResponseWriter, r *http.Request) {
 		app.errorJSON(w, errors.New("username, email and password are required"), http.StatusBadRequest)
 		app.ErrorLog.Println("username, email and password are empty")
 		return
+	}
+
+	// Admin code verification
+	const ADMIN_CODE = "FIELDEYES_ADMIN_2025"
+	if requestData.AdminCode != "" {
+		if requestData.AdminCode == ADMIN_CODE {
+			user.Role = "admin"
+			app.InfoLog.Printf("Admin signup detected for user: %s", user.Email)
+		} else {
+			app.errorJSON(w, errors.New("invalid admin code"), http.StatusBadRequest)
+			app.ErrorLog.Println("invalid admin code provided")
+			return
+		}
+	} else {
+		user.Role = "user" // Default role
 	}
 
 	// Check if user exists
@@ -70,6 +92,112 @@ func (app *Config) Signup(w http.ResponseWriter, r *http.Request) {
 		"user_id": id,
 	})
 	app.InfoLog.Printf("User created successfully with id %d", id)
+}
+
+// Admin middleware to check if user has admin role
+func (app *Config) IsAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract user information from the token
+		userID, _, _, err := app.GetUserInfoFromToken(r)
+		if err != nil {
+			app.errorJSON(w, errors.New("unauthorized: invalid or missing token"), http.StatusUnauthorized)
+			app.ErrorLog.Println(err)
+			return
+		}
+
+		// Get user from database to check role
+		user, err := app.Models.User.GetOne(userID)
+		if err != nil {
+			app.errorJSON(w, errors.New("user not found"), http.StatusNotFound)
+			app.ErrorLog.Println("user not found:", err)
+			return
+		}
+
+		// Check if user has admin role
+		if user.Role != "admin" {
+			app.errorJSON(w, errors.New("access denied: admin privileges required"), http.StatusForbidden)
+			app.ErrorLog.Println("non-admin user attempted to access admin endpoint")
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// GetAllDevicesForAdmin returns all devices in the system for admin users
+func (app *Config) GetAllDevicesForAdmin(w http.ResponseWriter, r *http.Request) {
+	// Get all devices from database
+	devices, err := app.Models.Device.GetAll()
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to retrieve devices"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to retrieve devices:", err)
+		return
+	}
+
+	app.InfoLog.Printf("Admin retrieved %d devices", len(devices))
+	app.writeJSON(w, http.StatusOK, devices)
+}
+
+// GetDeviceLogsForAdmin returns device logs for a specific device for admin users
+func (app *Config) GetDeviceLogsForAdmin(w http.ResponseWriter, r *http.Request) {
+	// Get serial number from query parameter
+	serialNumber := r.URL.Query().Get("serial_number")
+	if serialNumber == "" {
+		app.errorJSON(w, errors.New("missing device serial number"), http.StatusBadRequest)
+		app.ErrorLog.Println("missing device serial number")
+		return
+	}
+
+	// Get device by serial number
+	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
+	if err != nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		app.ErrorLog.Println("device not found:", err)
+		return
+	}
+
+	// Get date range parameters
+	startDateStr := r.URL.Query().Get("start_date")
+	endDateStr := r.URL.Query().Get("end_date")
+
+	var startDate, endDate time.Time
+
+	if startDateStr != "" {
+		parsedStartDate, err := time.Parse(time.RFC3339, startDateStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("invalid start_date format"), http.StatusBadRequest)
+			app.ErrorLog.Println("invalid start_date format:", err)
+			return
+		}
+		startDate = parsedStartDate
+	}
+
+	if endDateStr != "" {
+		parsedEndDate, err := time.Parse(time.RFC3339, endDateStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("invalid end_date format"), http.StatusBadRequest)
+			app.ErrorLog.Println("invalid end_date format:", err)
+			return
+		}
+		endDate = parsedEndDate
+	}
+
+	// Get device logs with optional date filtering
+	var logs []*data.DeviceData
+	if !startDate.IsZero() && !endDate.IsZero() {
+		logs, err = app.Models.DeviceData.GetLogsByDeviceIDWithDateRange(device.ID, startDate, endDate)
+	} else {
+		logs, err = app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+	}
+
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to retrieve device logs:", err)
+		return
+	}
+
+	app.InfoLog.Printf("Admin retrieved %d logs for device %s", len(logs), serialNumber)
+	app.writeJSON(w, http.StatusOK, logs)
 }
 
 func (app *Config) Login(w http.ResponseWriter, r *http.Request) {

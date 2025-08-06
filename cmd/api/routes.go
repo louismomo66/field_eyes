@@ -53,6 +53,16 @@ func (app *Config) routes() http.Handler {
 			r.Delete("/notifications/delete-all", app.DeleteAllNotifications)  // Delete all notifications for a user
 			r.Post("/notifications/generate", app.GenerateDeviceNotifications) // Generate notifications from device data
 			r.Get("/devices/notifications", app.GenerateDeviceNotifications)   // Generate notifications for a specific device by serial_number
+
+			// Admin-only routes
+			r.Group(func(r chi.Router) {
+				r.Use(func(next http.Handler) http.Handler {
+					return app.IsAdmin(next.ServeHTTP)
+				})
+
+				r.Get("/admin/devices", app.GetAllDevicesForAdmin)     // Get all devices for admin
+				r.Get("/admin/device-logs", app.GetDeviceLogsForAdmin) // Get device logs for admin
+			})
 		})
 	})
 	return mux

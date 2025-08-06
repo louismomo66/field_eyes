@@ -21,7 +21,7 @@ help:
 build:
 	@echo "Building API binary..."
 	mkdir -p ./app
-	go build -o ./app/field_eyes_api ./cmd/api
+	go build -buildvcs=false -o ./app/field_eyes_api ./cmd/api
 	@echo "Binary built at ./app/field_eyes_api"
 
 # Run the API locally
