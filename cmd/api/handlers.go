@@ -535,6 +535,38 @@ func (app *Config) CreateNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Attempt to send an email with the recommendation/notification
+	// Fetch the user to get their email
+	user, getUserErr := app.Models.User.GetOne(userID)
+	if getUserErr == nil && user != nil && user.Email != "" {
+		// Resolve a friendly device name for the email (fallback to serial in notification.DeviceName)
+		displayName := notification.DeviceName
+		if notificationRequest.DeviceID != 0 {
+			if d, derr := app.Models.Device.GetOne(notificationRequest.DeviceID); derr == nil && d != nil && d.Name != "" {
+				displayName = d.Name
+			}
+		} else if notificationRequest.DeviceName != "" {
+			if d, derr := app.Models.Device.GetBySerialNumber(notificationRequest.DeviceName); derr == nil && d != nil && d.Name != "" {
+				displayName = d.Name
+			}
+		}
+
+		// Build a simple HTML email body mirroring the notification
+		subject := fmt.Sprintf("SoilSense alert for %s", displayName)
+		htmlBody := fmt.Sprintf(`
+			<html>
+			  <body>
+			    <h2>Device: %s</h2>
+			    <p><strong>Type:</strong> %s</p>
+			    <p>%s</p>
+			    <p style="margin-top:16px;color:#6b7280;font-size:12px;">This message was generated automatically based on your device readings.</p>
+			  </body>
+			</html>`, displayName, notification.Type, notification.Message)
+
+		// Send asynchronously; don't block HTTP response
+		app.SendHTMLInBackground(user.Email, subject, htmlBody)
+	}
+
 	// Return success
 	app.writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"message":      "Notification created successfully",
@@ -825,6 +857,25 @@ func (app *Config) checkConditionsAndCreateNotifications(device *data.Device, la
 			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
 				app.InfoLog.Printf("Created low moisture notification for device %s", device.SerialNumber)
 				notificationsGenerated++
+
+				// Send email to the device owner using user-assigned name if available
+				if user, uErr := app.Models.User.GetOne(device.UserID); uErr == nil && user != nil && user.Email != "" {
+					displayName := device.Name
+					if displayName == "" {
+						displayName = device.SerialNumber
+					}
+					subject := fmt.Sprintf("SoilSense alert for %s", displayName)
+					htmlBody := fmt.Sprintf(`
+						<html>
+						  <body>
+						    <h2>Device: %s</h2>
+						    <p><strong>Type:</strong> %s</p>
+						    <p>%s</p>
+						    <p style="margin-top:16px;color:#6b7280;font-size:12px;">This message was generated automatically based on your device readings.</p>
+						  </body>
+						</html>`, displayName, notification.Type, notification.Message)
+					app.SendHTMLInBackground(user.Email, subject, htmlBody)
+				}
 			} else {
 				app.ErrorLog.Printf("Failed to create notification for device %s: %v", device.SerialNumber, err)
 			}
@@ -861,6 +912,25 @@ func (app *Config) checkConditionsAndCreateNotifications(device *data.Device, la
 			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
 				app.InfoLog.Printf("Created temperature notification for device %s", device.SerialNumber)
 				notificationsGenerated++
+
+				// Send email to the device owner using user-assigned name if available
+				if user, uErr := app.Models.User.GetOne(device.UserID); uErr == nil && user != nil && user.Email != "" {
+					displayName := device.Name
+					if displayName == "" {
+						displayName = device.SerialNumber
+					}
+					subject := fmt.Sprintf("SoilSense alert for %s", displayName)
+					htmlBody := fmt.Sprintf(`
+						<html>
+						  <body>
+						    <h2>Device: %s</h2>
+						    <p><strong>Type:</strong> %s</p>
+						    <p>%s</p>
+						    <p style="margin-top:16px;color:#6b7280;font-size:12px;">This message was generated automatically based on your device readings.</p>
+						  </body>
+						</html>`, displayName, notification.Type, notification.Message)
+					app.SendHTMLInBackground(user.Email, subject, htmlBody)
+				}
 			} else {
 				app.ErrorLog.Printf("Failed to create notification for device %s: %v", device.SerialNumber, err)
 			}
@@ -897,6 +967,25 @@ func (app *Config) checkConditionsAndCreateNotifications(device *data.Device, la
 			if err := app.Models.Notification.CreateNotification(&notification); err == nil {
 				app.InfoLog.Printf("Created pH notification for device %s", device.SerialNumber)
 				notificationsGenerated++
+
+				// Send email to the device owner using user-assigned name if available
+				if user, uErr := app.Models.User.GetOne(device.UserID); uErr == nil && user != nil && user.Email != "" {
+					displayName := device.Name
+					if displayName == "" {
+						displayName = device.SerialNumber
+					}
+					subject := fmt.Sprintf("SoilSense alert for %s", displayName)
+					htmlBody := fmt.Sprintf(`
+						<html>
+						  <body>
+						    <h2>Device: %s</h2>
+						    <p><strong>Type:</strong> %s</p>
+						    <p>%s</p>
+						    <p style="margin-top:16px;color:#6b7280;font-size:12px;">This message was generated automatically based on your device readings.</p>
+						  </body>
+						</html>`, displayName, notification.Type, notification.Message)
+					app.SendHTMLInBackground(user.Email, subject, htmlBody)
+				}
 			} else {
 				app.ErrorLog.Printf("Failed to create notification for device %s: %v", device.SerialNumber, err)
 			}

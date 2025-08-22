@@ -9,6 +9,7 @@ import (
 // Mailer is the interface for sending emails
 type Mailer interface {
 	SendOTP(to, otp string) error
+	SendHTML(to, subject, htmlBody string) error
 }
 
 // SMTPMailer implements the Mailer interface using SMTP
@@ -60,11 +61,32 @@ func (m *SMTPMailer) SendOTP(to, otp string) error {
 	return smtp.SendMail(addr, auth, m.From, []string{to}, []byte(message))
 }
 
+// SendHTML sends a generic HTML email
+func (m *SMTPMailer) SendHTML(to, subject, htmlBody string) error {
+	message := fmt.Sprintf("To: %s\r\n"+
+		"Subject: %s\r\n"+
+		"MIME-Version: 1.0\r\n"+
+		"Content-Type: text/html; charset=UTF-8\r\n"+
+		"\r\n"+
+		"%s\r\n", to, subject, htmlBody)
+
+	auth := smtp.PlainAuth("", m.Username, m.Password, m.Host)
+	addr := fmt.Sprintf("%s:%s", m.Host, m.Port)
+
+	return smtp.SendMail(addr, auth, m.From, []string{to}, []byte(message))
+}
+
 // MockMailer is a mock implementation of the Mailer interface for testing
 type MockMailer struct{}
 
 // SendOTP mocks sending an OTP code (for testing or development)
 func (m *MockMailer) SendOTP(to, otp string) error {
 	fmt.Printf("[MOCK EMAIL] To: %s, OTP: %s\n", to, otp)
+	return nil
+}
+
+// SendHTML mocks sending a generic HTML email
+func (m *MockMailer) SendHTML(to, subject, htmlBody string) error {
+	fmt.Printf("[MOCK EMAIL] To: %s, Subject: %s, Body: %s\n", to, subject, htmlBody)
 	return nil
 }
