@@ -64,6 +64,7 @@ func (app *Config) routes() http.Handler {
 				r.Get("/admin/device-logs", app.GetDeviceLogsForAdmin)            // Get device logs for admin
 				r.Get("/admin/latest-device-log", app.GetLatestDeviceLogForAdmin) // Get latest device log for admin
 				r.Get("/admin/download-device-data", app.DownloadDeviceData)      // Download device data as CSV
+				r.Post("/admin/reports/basic-soil-analysis", app.GenerateBasicSoilAnalysisForAdmin) // Generate basic soil analysis for admin
 			})
 		})
 	})

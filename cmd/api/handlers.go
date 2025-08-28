@@ -241,6 +241,83 @@ func (app *Config) GetLatestDeviceLogForAdmin(w http.ResponseWriter, r *http.Req
 	app.writeJSON(w, http.StatusOK, latestLog)
 }
 
+// GenerateBasicSoilAnalysisForAdmin generates a basic soil analysis report for admin users
+func (app *Config) GenerateBasicSoilAnalysisForAdmin(w http.ResponseWriter, r *http.Request) {
+	// Parse request parameters
+	var request struct {
+		SerialNumber string    `json:"serial_number"`
+		StartDate    time.Time `json:"start_date"`
+		EndDate      time.Time `json:"end_date"`
+	}
+
+	if err := app.ReadJSON(w, r, &request); err != nil {
+		app.ErrorLog.Printf("Failed to parse request body: %v", err)
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	app.InfoLog.Printf("Admin processing report request for device %s, date range: %s to %s",
+		request.SerialNumber, request.StartDate.Format(time.RFC3339), request.EndDate.Format(time.RFC3339))
+
+	// Validate device exists (no ownership check for admin)
+	device, err := app.Models.Device.GetBySerialNumber(request.SerialNumber)
+	if err != nil || device == nil {
+		app.ErrorLog.Printf("Device not found: %s, error: %v", request.SerialNumber, err)
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		return
+	}
+
+	// Get device logs for the specified period
+	logs, err := app.Models.DeviceData.GetLogsBySerialNumber(request.SerialNumber)
+	if err != nil {
+		app.ErrorLog.Printf("Failed to retrieve device logs for %s: %v", request.SerialNumber, err)
+		app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
+		return
+	}
+
+	app.InfoLog.Printf("Admin retrieved %d logs for device %s", len(logs), request.SerialNumber)
+
+	// Filter logs by date range
+	filteredLogs := make([]*data.DeviceData, 0)
+	for _, log := range logs {
+		if log.CreatedAt.After(request.StartDate) &&
+			log.CreatedAt.Before(request.EndDate.Add(24*time.Hour)) {
+			filteredLogs = append(filteredLogs, log)
+		}
+	}
+
+	app.InfoLog.Printf("Filtered to %d logs within date range", len(filteredLogs))
+
+	if len(filteredLogs) == 0 {
+		app.ErrorLog.Printf("No data available for device %s between %s and %s",
+			request.SerialNumber, request.StartDate.Format(time.RFC3339), request.EndDate.Format(time.RFC3339))
+		app.errorJSON(w, errors.New("no data available for the selected period"), http.StatusNotFound)
+		return
+	}
+
+	// Calculate statistics for each parameter
+	report := BasicSoilAnalysisReport{
+		DeviceName:  device.SerialNumber, // Use serial number as name if no custom name set
+		GeneratedAt: time.Now(),
+		StartDate:   request.StartDate,
+		EndDate:     request.EndDate,
+		Parameters: []ParameterAnalysis{
+			calculateParameterStats(filteredLogs, "pH", "pH", 6.0, 7.5),
+			calculateParameterStats(filteredLogs, "Nitrogen", "mg/kg", 20, 40),
+			calculateParameterStats(filteredLogs, "Phosphorous", "mg/kg", 20, 40),
+			calculateParameterStats(filteredLogs, "Potassium", "mg/kg", 150, 250),
+			calculateParameterStats(filteredLogs, "Soil Moisture", "%", 20, 60),
+			calculateParameterStats(filteredLogs, "Electrical Conductivity", "µS/cm", 200, 800),
+		},
+	}
+
+	// Calculate CEC based on available parameters
+	calculateCEC(&report)
+
+	app.InfoLog.Printf("Admin generated basic soil analysis report for device %s", request.SerialNumber)
+	app.writeJSON(w, http.StatusOK, report)
+}
+
 func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Email    string `json:"email"`
