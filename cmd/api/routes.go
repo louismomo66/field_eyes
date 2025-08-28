@@ -60,8 +60,9 @@ func (app *Config) routes() http.Handler {
 					return app.IsAdmin(next.ServeHTTP)
 				})
 
-				r.Get("/admin/devices", app.GetAllDevicesForAdmin)     // Get all devices for admin
-				r.Get("/admin/device-logs", app.GetDeviceLogsForAdmin) // Get device logs for admin
+				r.Get("/admin/devices", app.GetAllDevicesForAdmin)           // Get all devices for admin
+				r.Get("/admin/device-logs", app.GetDeviceLogsForAdmin)       // Get device logs for admin
+				r.Get("/admin/download-device-data", app.DownloadDeviceData) // Download device data as CSV
 			})
 		})
 	})

@@ -1005,3 +1005,99 @@ func (app *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"service": "field_eyes_api",
 	})
 }
+
+// DownloadDeviceData handles downloading device data as CSV for admin users
+func (app *Config) DownloadDeviceData(w http.ResponseWriter, r *http.Request) {
+	// Get device ID from query parameters
+	deviceIDStr := r.URL.Query().Get("device_id")
+	if deviceIDStr == "" {
+		app.errorJSON(w, errors.New("device_id is required"), http.StatusBadRequest)
+		return
+	}
+
+	deviceID, err := strconv.ParseUint(deviceIDStr, 10, 32)
+	if err != nil {
+		app.errorJSON(w, errors.New("invalid device_id"), http.StatusBadRequest)
+		return
+	}
+
+	// Get optional date range parameters
+	startDateStr := r.URL.Query().Get("start_date")
+	endDateStr := r.URL.Query().Get("end_date")
+
+	var startDate, endDate time.Time
+
+	if startDateStr != "" {
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("invalid start_date format. Use YYYY-MM-DD"), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if endDateStr != "" {
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			app.errorJSON(w, errors.New("invalid end_date format. Use YYYY-MM-DD"), http.StatusBadRequest)
+			return
+		}
+		// Set end date to end of day
+		endDate = endDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	}
+
+	// Get device information
+	device, err := app.Models.Device.GetOne(uint(deviceID))
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to get device"), http.StatusInternalServerError)
+		return
+	}
+
+	if device == nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		return
+	}
+
+	// Get device data
+	deviceData, err := app.Models.DeviceData.GetDeviceDataForDownload(uint(deviceID), startDate, endDate)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to get device data"), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate CSV content
+	csvContent := "Timestamp,Serial Number,Temperature,Humidity,Nitrogen,Phosphorous,Potassium,pH,Soil Moisture,Soil Temperature,Soil Humidity,Electrical Conductivity,Longitude,Latitude\n"
+
+	for _, data := range deviceData {
+		csvContent += fmt.Sprintf("%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.6f,%.6f\n",
+			data.CreatedAt.Format("2006-01-02 15:04:05"),
+			data.SerialNumber,
+			data.Temperature,
+			data.Humidity,
+			data.Nitrogen,
+			data.Phosphorous,
+			data.Potassium,
+			data.PH,
+			data.SoilMoisture,
+			data.SoilTemperature,
+			data.SoilHumidity,
+			data.ElectricalConductivity,
+			data.Longitude,
+			data.Latitude,
+		)
+	}
+
+	// Set response headers for file download
+	deviceName := device.Name
+	if deviceName == "" {
+		deviceName = device.SerialNumber
+	}
+
+	filename := fmt.Sprintf("device_data_%s_%s.csv", deviceName, time.Now().Format("2006-01-02"))
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(csvContent)))
+
+	// Write CSV content to response
+	w.Write([]byte(csvContent))
+}

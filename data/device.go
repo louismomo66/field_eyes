@@ -182,6 +182,33 @@ func (r *DeviceDataRepository) GetLogsBySerialNumber(serialNumber string) ([]*De
 	return logs, result.Error
 }
 
+// GetDeviceDataForDownload retrieves device data for download with optional date range filtering
+func (r *DeviceDataRepository) GetDeviceDataForDownload(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error) {
+	var logs []*DeviceData
+
+	// If both dates are zero, get all data for the device
+	if startDate.IsZero() && endDate.IsZero() {
+		result := r.db.Where("device_id = ?", deviceID).Order("created_at ASC").Find(&logs)
+		return logs, result.Error
+	}
+
+	// If only start date is provided, get data from start date to now
+	if !startDate.IsZero() && endDate.IsZero() {
+		result := r.db.Where("device_id = ? AND created_at >= ?", deviceID, startDate).Order("created_at ASC").Find(&logs)
+		return logs, result.Error
+	}
+
+	// If only end date is provided, get data from beginning to end date
+	if startDate.IsZero() && !endDate.IsZero() {
+		result := r.db.Where("device_id = ? AND created_at <= ?", deviceID, endDate).Order("created_at ASC").Find(&logs)
+		return logs, result.Error
+	}
+
+	// If both dates are provided, get data within the range
+	result := r.db.Where("device_id = ? AND created_at >= ? AND created_at <= ?", deviceID, startDate, endDate).Order("created_at ASC").Find(&logs)
+	return logs, result.Error
+}
+
 // Update updates an existing device in the database
 func (r *DeviceRepository) Update(device *Device) error {
 	result := r.db.Save(device)

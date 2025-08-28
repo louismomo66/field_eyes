@@ -40,6 +40,7 @@ type DeviceDataInterface interface {
 	GetLogsByDeviceIDWithDateRange(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error)
 	GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error)
 	DeleteByDeviceID(deviceID uint) error
+	GetDeviceDataForDownload(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error)
 }
 
 // NotificationInterface defines the methods for Notification operations
