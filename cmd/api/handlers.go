@@ -200,6 +200,47 @@ func (app *Config) GetDeviceLogsForAdmin(w http.ResponseWriter, r *http.Request)
 	app.writeJSON(w, http.StatusOK, logs)
 }
 
+// GetLatestDeviceLogForAdmin returns the latest log for a specific device for admin users
+func (app *Config) GetLatestDeviceLogForAdmin(w http.ResponseWriter, r *http.Request) {
+	// Get the device serial number from the query parameters
+	serialNumber := r.URL.Query().Get("serial_number")
+	if serialNumber == "" {
+		app.errorJSON(w, errors.New("missing device serial number"), http.StatusBadRequest)
+		app.ErrorLog.Println("missing device serial number")
+		return
+	}
+
+	// Get device by serial number (no ownership check for admin)
+	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
+	if err != nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		app.ErrorLog.Println("device not found:", err)
+		return
+	}
+
+	// Get logs for the device (sorted by created_at DESC)
+	logs, err := app.Models.DeviceData.GetLogsByDeviceID(device.ID)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to retrieve device logs"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to retrieve device logs:", err)
+		return
+	}
+
+	// Check if logs exist
+	if len(logs) == 0 {
+		app.errorJSON(w, errors.New("no logs found for this device"), http.StatusNotFound)
+		app.ErrorLog.Printf("No logs found for device %s (ID: %d)", serialNumber, device.ID)
+		return
+	}
+
+	// Return only the latest log (first item since sorted by created_at DESC)
+	latestLog := logs[0]
+	app.InfoLog.Printf("Admin retrieved latest log for device %s (ID: %d) from %s",
+		serialNumber, device.ID, latestLog.CreatedAt.Format(time.RFC3339))
+
+	app.writeJSON(w, http.StatusOK, latestLog)
+}
+
 func (app *Config) Login(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Email    string `json:"email"`
