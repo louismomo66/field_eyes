@@ -23,7 +23,9 @@ WORKDIR /app
 COPY --from=builder /app/field_eyes_api .
 
 # Expose the port
-# EXPOSE 9002
+# Expose the port
+EXPOSE 9002
+ENV PORT 9002
 
 # Run the application
 CMD ["./field_eyes_api"]
