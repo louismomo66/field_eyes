@@ -25,8 +25,8 @@ type Device struct {
 // DeviceData represents the data logs for a device.
 type DeviceData struct {
 	gorm.Model
-	DeviceID               uint      `gorm:"not null" json:"device_id"` // Foreign key to the Device table
-	SerialNumber           string    `gorm:"not null" json:"serial_number"`
+	DeviceID               uint      `gorm:"index:idx_device_created,priority:1;not null" json:"device_id"` // Foreign key to the Device table
+	SerialNumber           string    `gorm:"index:idx_serial_created,priority:1;not null" json:"serial_number"`
 	Temperature            float64   `json:"temperature"`
 	Humidity               float64   `json:"humidity"`
 	Nitrogen               float64   `json:"nitrogen"`
@@ -39,7 +39,7 @@ type DeviceData struct {
 	ElectricalConductivity float64   `json:"electrical_conductivity"`
 	Longitude              float64   `json:"longitude"`
 	Latitude               float64   `json:"latitude"`
-	CreatedAt              time.Time `json:"created_at"`
+	CreatedAt              time.Time `gorm:"index:idx_device_created,priority:2;index:idx_serial_created,priority:2" json:"created_at"`
 }
 
 // Notification represents a notification in the database
