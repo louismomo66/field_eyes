@@ -30,7 +30,7 @@ run:
 	@echo "Checking if Docker services are running..."
 	@docker ps | grep -q field_eyes-postgres-1 || (echo "Starting Docker services first..." && docker compose up -d postgres redis mqtt && sleep 5)
 	@echo "Running API locally..."
-	DB_HOST=localhost DB_PORT=5432 REDIS_HOST=localhost MQTT_BROKER=localhost MQTT_PORT=1885 DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable" go run ./cmd/api
+	DB_HOST=localhost DB_PORT=5432 REDIS_HOST=localhost MQTT_BROKER=localhost MQTT_PORT=1884 DSN="host=localhost port=5432 user=postgres password=postgres123456 dbname=field_eyes sslmode=disable" go run ./cmd/api
 
 # Build Docker image for development
 .PHONY: docker-build
