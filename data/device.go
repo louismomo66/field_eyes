@@ -373,3 +373,52 @@ func (r *NotificationRepository) HasSimilarNotification(deviceID uint, deviceNam
 
 	return otherCount > 0, result.Error
 }
+
+// ControlDevice represents a device serial number that has been designated
+// by an admin as a controllable switch device.
+type ControlDevice struct {
+	gorm.Model
+	SerialNumber string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"serial_number"`
+	Label        string         `gorm:"type:varchar(100)" json:"label"`
+	AddedByID    uint           `json:"added_by_id"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// ControlDeviceRepository implements ControlDeviceInterface using GORM.
+type ControlDeviceRepository struct {
+	db *gorm.DB
+}
+
+// NewControlDeviceRepository creates a new ControlDeviceRepository.
+func NewControlDeviceRepository(db *gorm.DB) ControlDeviceInterface {
+	return &ControlDeviceRepository{db: db}
+}
+
+// GetAll returns all control devices.
+func (r *ControlDeviceRepository) GetAll() ([]*ControlDevice, error) {
+	var devices []*ControlDevice
+	result := r.db.Find(&devices)
+	return devices, result.Error
+}
+
+// GetBySerialNumber returns a control device by serial number.
+func (r *ControlDeviceRepository) GetBySerialNumber(serialNumber string) (*ControlDevice, error) {
+	var device ControlDevice
+	result := r.db.Where("serial_number = ?", serialNumber).First(&device)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &device, result.Error
+}
+
+// Add adds a new control device.
+func (r *ControlDeviceRepository) Add(device *ControlDevice) error {
+	return r.db.Create(device).Error
+}
+
+// Remove removes a control device by serial number.
+func (r *ControlDeviceRepository) Remove(serialNumber string) error {
+	return r.db.Where("serial_number = ?", serialNumber).Delete(&ControlDevice{}).Error
+}

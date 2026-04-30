@@ -56,3 +56,11 @@ type NotificationInterface interface {
 	DeleteAllNotifications(userID uint) error
 	HasSimilarNotification(deviceID uint, deviceName string, userID uint, notificationType string, message string) (bool, error)
 }
+
+// ControlDeviceInterface defines the methods for ControlDevice operations.
+type ControlDeviceInterface interface {
+	GetAll() ([]*ControlDevice, error)
+	GetBySerialNumber(serialNumber string) (*ControlDevice, error)
+	Add(device *ControlDevice) error
+	Remove(serialNumber string) error
+}

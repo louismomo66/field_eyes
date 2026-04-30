@@ -1219,3 +1219,140 @@ func (app *Config) DownloadDeviceData(w http.ResponseWriter, r *http.Request) {
 	// Write CSV content to response
 	w.Write([]byte(csvContent))
 }
+
+// ---- Control Device Handlers ----
+
+// GetControlDevices returns all control devices (accessible to all authenticated users for dashboard rendering)
+func (app *Config) GetControlDevices(w http.ResponseWriter, r *http.Request) {
+	devices, err := app.Models.ControlDevice.GetAll()
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to retrieve control devices"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to retrieve control devices:", err)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, devices)
+}
+
+// AddControlDevice allows an admin to designate a device serial number as a control device
+func (app *Config) AddControlDevice(w http.ResponseWriter, r *http.Request) {
+	userID, _, _, err := app.GetUserInfoFromToken(r)
+	if err != nil {
+		app.errorJSON(w, errors.New("unauthorized"), http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		SerialNumber string `json:"serial_number"`
+		Label        string `json:"label"`
+	}
+	if err := app.ReadJSON(w, r, &req); err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+	if req.SerialNumber == "" {
+		app.errorJSON(w, errors.New("serial_number is required"), http.StatusBadRequest)
+		return
+	}
+
+	// Check the serial number exists as a known device
+	existing, err := app.Models.Device.GetBySerialNumber(req.SerialNumber)
+	if err != nil || existing == nil {
+		app.errorJSON(w, errors.New("device with that serial number not found"), http.StatusNotFound)
+		return
+	}
+
+	// Check if already a control device
+	alreadyControl, err := app.Models.ControlDevice.GetBySerialNumber(req.SerialNumber)
+	if err == nil && alreadyControl != nil {
+		app.errorJSON(w, errors.New("device is already a control device"), http.StatusConflict)
+		return
+	}
+
+	cd := &data.ControlDevice{
+		SerialNumber: req.SerialNumber,
+		Label:        req.Label,
+		AddedByID:    userID,
+	}
+	if err := app.Models.ControlDevice.Add(cd); err != nil {
+		app.errorJSON(w, errors.New("failed to add control device"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to add control device:", err)
+		return
+	}
+
+	app.InfoLog.Printf("Admin %d added control device: %s", userID, req.SerialNumber)
+	app.writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"message": "Control device added successfully",
+		"device":  cd,
+	})
+}
+
+// RemoveControlDevice allows an admin to remove a serial number from the control device list
+func (app *Config) RemoveControlDevice(w http.ResponseWriter, r *http.Request) {
+	serialNumber := r.URL.Query().Get("serial_number")
+	if serialNumber == "" {
+		app.errorJSON(w, errors.New("serial_number query parameter is required"), http.StatusBadRequest)
+		return
+	}
+
+	if err := app.Models.ControlDevice.Remove(serialNumber); err != nil {
+		app.errorJSON(w, errors.New("failed to remove control device"), http.StatusInternalServerError)
+		app.ErrorLog.Println("failed to remove control device:", err)
+		return
+	}
+
+	app.InfoLog.Printf("Control device removed: %s", serialNumber)
+	app.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Control device removed successfully",
+	})
+}
+
+// SendSwitchCommand publishes an MQTT on/off command for a control device
+func (app *Config) SendSwitchCommand(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SerialNumber string `json:"serial_number"`
+		State        bool   `json:"state"` // true = ON, false = OFF
+	}
+	if err := app.ReadJSON(w, r, &req); err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+	if req.SerialNumber == "" {
+		app.errorJSON(w, errors.New("serial_number is required"), http.StatusBadRequest)
+		return
+	}
+
+	// Verify the device is indeed a designated control device
+	cd, err := app.Models.ControlDevice.GetBySerialNumber(req.SerialNumber)
+	if err != nil || cd == nil {
+		app.errorJSON(w, errors.New("device is not registered as a control device"), http.StatusForbidden)
+		return
+	}
+
+	stateStr := "OFF"
+	if req.State {
+		stateStr = "ON"
+	}
+
+	// Publish MQTT command if broker is available
+	if app.MQTT != nil && app.MQTT.IsConnected() {
+		topic := "switch/load"
+		payload := fmt.Sprintf(`{"command":"switch","state":"%s","serial_number":"%s"}`, stateStr, req.SerialNumber)
+		if err := app.MQTT.Publish(topic, payload); err != nil {
+			app.ErrorLog.Printf("Failed to publish switch command for %s: %v", req.SerialNumber, err)
+			app.errorJSON(w, errors.New("failed to publish switch command to MQTT broker"), http.StatusInternalServerError)
+			return
+		}
+		app.InfoLog.Printf("Published switch command %s for device %s", stateStr, req.SerialNumber)
+	} else {
+		app.ErrorLog.Printf("MQTT not connected — cannot send switch command for %s", req.SerialNumber)
+		app.errorJSON(w, errors.New("MQTT broker not connected"), http.StatusServiceUnavailable)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":       fmt.Sprintf("Switch command %s sent successfully", stateStr),
+		"serial_number": req.SerialNumber,
+		"state":         req.State,
+	})
+}
+

@@ -54,6 +54,10 @@ func (app *Config) routes() http.Handler {
 			r.Post("/notifications/generate", app.GenerateDeviceNotifications) // Generate notifications from device data
 			r.Get("/devices/notifications", app.GenerateDeviceNotifications)   // Generate notifications for a specific device by serial_number
 
+			// Control device management
+			r.Get("/control-devices", app.GetControlDevices)          // Get all control devices for a user
+			r.Post("/device-switch", app.SendSwitchCommand)           // Send a switch ON/OFF command via MQTT
+
 			// Admin-only routes
 			r.Group(func(r chi.Router) {
 				r.Use(func(next http.Handler) http.Handler {
@@ -65,6 +69,10 @@ func (app *Config) routes() http.Handler {
 				r.Get("/admin/latest-device-log", app.GetLatestDeviceLogForAdmin)                   // Get latest device log for admin
 				r.Get("/admin/download-device-data", app.DownloadDeviceData)                        // Download device data as CSV
 				r.Post("/admin/reports/basic-soil-analysis", app.GenerateBasicSoilAnalysisForAdmin) // Generate basic soil analysis for admin
+
+				// Control device management (admin only)
+				r.Post("/admin/control-devices", app.AddControlDevice)                              // Add a control device
+				r.Delete("/admin/control-devices", app.RemoveControlDevice)                         // Remove a control device
 			})
 		})
 	})
