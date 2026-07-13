@@ -93,10 +93,10 @@ func main() {
 
 	// Initialize the mailer
 	// In production, use SMTPMailer
-	app.Mailer = email.NewSMTPMailer()
+	// app.Mailer = email.NewSMTPMailer()
 
 	// For development/testing, use MockMailer
-	// app.Mailer = &email.MockMailer{}
+	app.Mailer = &email.MockMailer{}
 
 	// Initialize Redis client
 	redisClient, err := NewRedisClient()
