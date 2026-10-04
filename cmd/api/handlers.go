@@ -1244,6 +1244,7 @@ func (app *Config) AddControlDevice(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SerialNumber string `json:"serial_number"`
 		Label        string `json:"label"`
+		Kind         string `json:"kind"` // "valve" (default) or "switch"
 	}
 	if err := app.ReadJSON(w, r, &req); err != nil {
 		app.errorJSON(w, err, http.StatusBadRequest)
@@ -1251,6 +1252,13 @@ func (app *Config) AddControlDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SerialNumber == "" {
 		app.errorJSON(w, errors.New("serial_number is required"), http.StatusBadRequest)
+		return
+	}
+	if req.Kind == "" {
+		req.Kind = data.ControlKindValve // the admin page does not send a type; control devices are valves
+	}
+	if req.Kind != data.ControlKindSwitch && req.Kind != data.ControlKindValve {
+		app.errorJSON(w, errors.New(`kind must be "switch" or "valve"`), http.StatusBadRequest)
 		return
 	}
 
@@ -1271,12 +1279,16 @@ func (app *Config) AddControlDevice(w http.ResponseWriter, r *http.Request) {
 	cd := &data.ControlDevice{
 		SerialNumber: req.SerialNumber,
 		Label:        req.Label,
+		Kind:         req.Kind,
 		AddedByID:    userID,
 	}
 	if err := app.Models.ControlDevice.Add(cd); err != nil {
 		app.errorJSON(w, errors.New("failed to add control device"), http.StatusInternalServerError)
 		app.ErrorLog.Println("failed to add control device:", err)
 		return
+	}
+	if cd.Kind == data.ControlKindValve {
+		app.setUpValveConfig(cd.SerialNumber, userID)
 	}
 
 	app.InfoLog.Printf("Admin %d added control device: %s", userID, req.SerialNumber)
@@ -1294,10 +1306,14 @@ func (app *Config) RemoveControlDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	removed, _ := app.Models.ControlDevice.GetBySerialNumber(serialNumber)
 	if err := app.Models.ControlDevice.Remove(serialNumber); err != nil {
 		app.errorJSON(w, errors.New("failed to remove control device"), http.StatusInternalServerError)
 		app.ErrorLog.Println("failed to remove control device:", err)
 		return
+	}
+	if removed != nil && removed.Kind == data.ControlKindValve {
+		app.retireValveConfig(serialNumber)
 	}
 
 	app.InfoLog.Printf("Control device removed: %s", serialNumber)

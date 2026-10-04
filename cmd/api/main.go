@@ -148,6 +148,7 @@ func main() {
 			app.ErrorLog.Printf("Failed to start MQTT device data listener: %v", err)
 		} else {
 			app.InfoLog.Println("MQTT device data listener started successfully")
+			app.republishValveConfigs()
 		}
 
 		// Defer closing the MQTT connection

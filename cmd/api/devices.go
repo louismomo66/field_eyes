@@ -849,6 +849,63 @@ func (app *Config) DeleteDevice(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AdminDeleteDevice permanently deletes any device and all of its readings. If the device
+// is a control device, that entry (and a valve's schedule) goes too. It cannot be undone.
+func (app *Config) AdminDeleteDevice(w http.ResponseWriter, r *http.Request) {
+	serialNumber := r.URL.Query().Get("serial_number")
+	if serialNumber == "" {
+		app.errorJSON(w, errors.New("missing device serial number"), http.StatusBadRequest)
+		return
+	}
+
+	device, err := app.Models.Device.GetBySerialNumber(serialNumber)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to look up the device"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("admin delete: lookup of %s failed: %v", serialNumber, err)
+		return
+	}
+	if device == nil {
+		app.errorJSON(w, errors.New("device not found"), http.StatusNotFound)
+		return
+	}
+
+	readings, err := app.Models.DeviceData.PurgeByDeviceID(device.ID)
+	if err != nil {
+		app.errorJSON(w, errors.New("failed to delete the device's readings"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("admin delete: readings of %s: %v", serialNumber, err)
+		return
+	}
+
+	if control, _ := app.Models.ControlDevice.GetBySerialNumber(serialNumber); control != nil {
+		if err := app.Models.ControlDevice.Remove(serialNumber); err != nil {
+			app.ErrorLog.Printf("admin delete: control device entry of %s: %v", serialNumber, err)
+		} else if control.Kind == data.ControlKindValve {
+			app.retireValveConfig(serialNumber)
+		}
+	}
+
+	if err := app.Models.Device.PurgeByID(device.ID); err != nil {
+		app.errorJSON(w, errors.New("the readings were deleted, but the device itself could not be - try again"), http.StatusInternalServerError)
+		app.ErrorLog.Printf("admin delete: device %s: %v", serialNumber, err)
+		return
+	}
+
+	if app.Redis != nil {
+		go func() {
+			_ = app.Redis.InvalidateDeviceLogsCache(device.ID)
+			_ = app.Redis.InvalidateCache(fmt.Sprintf("device_logs_serial:%s", serialNumber))
+			_ = app.Redis.InvalidateUserDevicesCache(device.UserID)
+		}()
+	}
+
+	userID, _, _, _ := app.GetUserInfoFromToken(r)
+	app.InfoLog.Printf("Admin %d permanently deleted device %s (ID %d) and %d readings", userID, serialNumber, device.ID, readings)
+	app.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":          fmt.Sprintf("device %s and its %d readings were deleted", serialNumber, readings),
+		"deleted_readings": readings,
+	})
+}
+
 // UpdateDeviceName updates the name of a device
 func (app *Config) UpdateDeviceName(w http.ResponseWriter, r *http.Request) {
 	// Extract user information from the token

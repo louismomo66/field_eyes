@@ -10,6 +10,7 @@ type Models struct {
 	DeviceData    DeviceDataInterface
 	Notification  NotificationInterface
 	ControlDevice ControlDeviceInterface
+	ValveConfig   ValveConfigInterface
 	// Add other repositories like Plan here if needed
 }
 
@@ -21,6 +22,7 @@ func New(gormDB *gorm.DB) Models {
 		DeviceData:    NewDeviceDataRepository(gormDB),
 		Notification:  NewNotificationRepository(gormDB),
 		ControlDevice: NewControlDeviceRepository(gormDB),
+		ValveConfig:   NewValveConfigRepository(gormDB),
 		// Initialize other repositories here
 	}
 }

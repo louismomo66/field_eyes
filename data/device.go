@@ -275,6 +275,18 @@ func (r *DeviceRepository) DeleteByID(id uint) error {
 	return r.db.Delete(&Device{}, id).Error
 }
 
+// PurgeByID permanently removes a device. DeleteByID only soft-deletes it, and the
+// soft-deleted row would keep the serial number reserved, so it could never register again.
+func (r *DeviceRepository) PurgeByID(id uint) error {
+	return r.db.Unscoped().Delete(&Device{}, id).Error
+}
+
+// PurgeByDeviceID permanently removes all readings of a device (not just hides them)
+func (r *DeviceDataRepository) PurgeByDeviceID(deviceID uint) (int64, error) {
+	res := r.db.Unscoped().Where("device_id = ?", deviceID).Delete(&DeviceData{})
+	return res.RowsAffected, res.Error
+}
+
 // DeleteByDeviceID deletes all device data records for a specific device
 func (r *DeviceDataRepository) DeleteByDeviceID(deviceID uint) error {
 	return r.db.Where("device_id = ?", deviceID).Delete(&DeviceData{}).Error
@@ -374,12 +386,20 @@ func (r *NotificationRepository) HasSimilarNotification(deviceID uint, deviceNam
 	return otherCount > 0, result.Error
 }
 
+// A control device's Kind: "switch" is the original plain on/off device, "valve" is a
+// scheduled valve (see ValveConfig).
+const (
+	ControlKindSwitch = "switch"
+	ControlKindValve  = "valve"
+)
+
 // ControlDevice represents a device serial number that has been designated
 // by an admin as a controllable switch device.
 type ControlDevice struct {
 	gorm.Model
 	SerialNumber string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"serial_number"`
 	Label        string         `gorm:"type:varchar(100)" json:"label"`
+	Kind         string         `gorm:"type:varchar(20);not null;default:switch" json:"kind"`
 	AddedByID    uint           `json:"added_by_id"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
@@ -418,7 +438,8 @@ func (r *ControlDeviceRepository) Add(device *ControlDevice) error {
 	return r.db.Create(device).Error
 }
 
-// Remove removes a control device by serial number.
+// Remove removes a control device by serial number. It is a hard delete: a soft-deleted
+// row would still hold the unique serial_number, so the device could never be added again.
 func (r *ControlDeviceRepository) Remove(serialNumber string) error {
-	return r.db.Where("serial_number = ?", serialNumber).Delete(&ControlDevice{}).Error
+	return r.db.Unscoped().Where("serial_number = ?", serialNumber).Delete(&ControlDevice{}).Error
 }

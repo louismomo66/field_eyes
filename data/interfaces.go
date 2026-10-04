@@ -30,6 +30,8 @@ type DeviceInterface interface {
 	Update(device *Device) error
 	GetUnclaimedDevices() ([]*Device, error)
 	DeleteByID(id uint) error
+	// PurgeByID permanently removes the device (DeleteByID only hides it)
+	PurgeByID(id uint) error
 	// Add other methods as needed
 }
 
@@ -40,6 +42,8 @@ type DeviceDataInterface interface {
 	GetLogsByDeviceIDWithDateRange(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error)
 	GetLogsBySerialNumber(serialNumber string) ([]*DeviceData, error)
 	DeleteByDeviceID(deviceID uint) error
+	// PurgeByDeviceID permanently removes every reading of a device and returns how many
+	PurgeByDeviceID(deviceID uint) (int64, error)
 	GetDeviceDataForDownload(deviceID uint, startDate, endDate time.Time) ([]*DeviceData, error)
 }
 

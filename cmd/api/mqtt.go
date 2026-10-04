@@ -47,6 +47,10 @@ func NewMQTTClient(app *Config) (*MQTTClient, error) {
 	opts.SetPingTimeout(1 * time.Second)
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
+	if username := os.Getenv("MQTT_USERNAME"); username != "" {
+		opts.SetUsername(username)
+		opts.SetPassword(os.Getenv("MQTT_PASSWORD"))
+	}
 	opts.SetConnectionLostHandler(func(client mqtt.Client, err error) {
 		app.ErrorLog.Printf("MQTT connection lost: %v", err)
 	})
@@ -79,6 +83,13 @@ func (m *MQTTClient) StartDeviceDataListener() error {
 		return fmt.Errorf("failed to subscribe to topic %s: %v", chunkedTopic, err)
 	}
 	m.app.InfoLog.Printf("MQTT client subscribed to topic: %s", chunkedTopic)
+
+	// Valve devices report their position here (the schedule itself goes out on <serial>/valve/config)
+	valveTopic := fmt.Sprintf("%s/+/valve", m.topicRoot)
+	if err := m.Subscribe(valveTopic, m.handleValveStatus); err != nil {
+		return fmt.Errorf("failed to subscribe to topic %s: %v", valveTopic, err)
+	}
+	m.app.InfoLog.Printf("MQTT client subscribed to topic: %s", valveTopic)
 
 	// Start a goroutine to clean up stale message buffers
 	go m.cleanupStaleBuffers()
@@ -224,6 +235,63 @@ func (m *MQTTClient) Publish(topic string, payload interface{}) error {
 		return fmt.Errorf("publish error: %v", token.Error())
 	}
 	return nil
+}
+
+// PublishRetained publishes at QoS 1 with the retain flag, so the broker keeps the message
+// and delivers it to a device whenever it next subscribes. It gives up after 5 seconds.
+func (m *MQTTClient) PublishRetained(topic string, payload []byte) error {
+	token := m.client.Publish(topic, 1, true, payload)
+	if !token.WaitTimeout(5 * time.Second) {
+		return fmt.Errorf("publish to %s timed out", topic)
+	}
+	if err := token.Error(); err != nil {
+		return fmt.Errorf("publish error: %v", err)
+	}
+	return nil
+}
+
+// handleValveStatus records what a valve device reports on <root>/<serial>/valve.
+func (m *MQTTClient) handleValveStatus(client mqtt.Client, msg mqtt.Message) {
+	parts := strings.Split(msg.Topic(), "/")
+	if len(parts) < 2 {
+		return
+	}
+	serialNumber := parts[len(parts)-2]
+
+	var status struct {
+		SerialNumber string `json:"serial_number"`
+		Valve        string `json:"valve"`
+		Mode         string `json:"mode"`
+		Version      uint   `json:"version"`
+		ChangedAt    int64  `json:"changed_at"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &status); err != nil {
+		m.app.ErrorLog.Printf("Ignoring malformed valve status on %s: %v", msg.Topic(), err)
+		return
+	}
+	// The broker is open, so only accept reports for valve devices, from themselves
+	if status.SerialNumber != serialNumber {
+		return
+	}
+	cd, err := m.app.Models.ControlDevice.GetBySerialNumber(serialNumber)
+	if err != nil || cd == nil || cd.Kind != data.ControlKindValve {
+		return
+	}
+	valve := strings.ToUpper(status.Valve)
+	if valve != "OPEN" && valve != "CLOSED" && valve != "UNKNOWN" {
+		return
+	}
+
+	var changedAt *time.Time
+	if status.ChangedAt > 1735689600 { // after 2025-01-01: the device's clock was set
+		t := time.Unix(status.ChangedAt, 0).UTC()
+		changedAt = &t
+	}
+	if err := m.app.Models.ValveConfig.UpdateReport(serialNumber, valve, status.Mode, status.Version, time.Now().UTC(), changedAt); err != nil {
+		m.app.ErrorLog.Printf("Could not record valve status for %s: %v", serialNumber, err)
+		return
+	}
+	m.app.InfoLog.Printf("Valve %s reports %s (mode %s, config v%d)", serialNumber, valve, status.Mode, status.Version)
 }
 
 func (m *MQTTClient) IsConnected() bool {

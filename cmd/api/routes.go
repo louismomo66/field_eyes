@@ -57,6 +57,8 @@ func (app *Config) routes() http.Handler {
 			// Control device management
 			r.Get("/control-devices", app.GetControlDevices)          // Get all control devices for a user
 			r.Post("/device-switch", app.SendSwitchCommand)           // Send a switch ON/OFF command via MQTT
+			r.Get("/valve-config", app.GetValveConfig)                // Valve schedule + manual override for a valve device
+			r.Put("/valve-config", app.SaveValveConfig)               // Save it and send it to the device via MQTT
 
 			// Admin-only routes
 			r.Group(func(r chi.Router) {
@@ -65,6 +67,7 @@ func (app *Config) routes() http.Handler {
 				})
 
 				r.Get("/admin/devices", app.GetAllDevicesForAdmin)                                  // Get all devices for admin
+				r.Delete("/admin/device", app.AdminDeleteDevice)                                    // Permanently delete a device and all its readings
 				r.Get("/admin/device-logs", app.GetDeviceLogsForAdmin)                              // Get device logs for admin
 				r.Get("/admin/latest-device-log", app.GetLatestDeviceLogForAdmin)                   // Get latest device log for admin
 				r.Get("/admin/download-device-data", app.DownloadDeviceData)                        // Download device data as CSV
