@@ -269,12 +269,12 @@ func (m *MQTTClient) handleValveStatus(client mqtt.Client, msg mqtt.Message) {
 		m.app.ErrorLog.Printf("Ignoring malformed valve status on %s: %v", msg.Topic(), err)
 		return
 	}
-	// The broker is open, so only accept reports for valve devices, from themselves
+	// The broker is open, so only accept reports for control devices, from themselves
 	if status.SerialNumber != serialNumber {
 		return
 	}
 	cd, err := m.app.Models.ControlDevice.GetBySerialNumber(serialNumber)
-	if err != nil || cd == nil || cd.Kind != data.ControlKindValve {
+	if err != nil || cd == nil {
 		return
 	}
 	valve := strings.ToUpper(status.Valve)

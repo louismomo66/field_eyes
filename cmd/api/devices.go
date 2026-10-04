@@ -879,7 +879,7 @@ func (app *Config) AdminDeleteDevice(w http.ResponseWriter, r *http.Request) {
 	if control, _ := app.Models.ControlDevice.GetBySerialNumber(serialNumber); control != nil {
 		if err := app.Models.ControlDevice.Remove(serialNumber); err != nil {
 			app.ErrorLog.Printf("admin delete: control device entry of %s: %v", serialNumber, err)
-		} else if control.Kind == data.ControlKindValve {
+		} else {
 			app.retireValveConfig(serialNumber)
 		}
 	}

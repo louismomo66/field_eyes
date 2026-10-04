@@ -386,20 +386,12 @@ func (r *NotificationRepository) HasSimilarNotification(deviceID uint, deviceNam
 	return otherCount > 0, result.Error
 }
 
-// A control device's Kind: "switch" is the original plain on/off device, "valve" is a
-// scheduled valve (see ValveConfig).
-const (
-	ControlKindSwitch = "switch"
-	ControlKindValve  = "valve"
-)
-
 // ControlDevice represents a device serial number that has been designated
 // by an admin as a controllable switch device.
 type ControlDevice struct {
 	gorm.Model
 	SerialNumber string         `gorm:"type:varchar(100);uniqueIndex;not null" json:"serial_number"`
 	Label        string         `gorm:"type:varchar(100)" json:"label"`
-	Kind         string         `gorm:"type:varchar(20);not null;default:switch" json:"kind"`
 	AddedByID    uint           `json:"added_by_id"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`

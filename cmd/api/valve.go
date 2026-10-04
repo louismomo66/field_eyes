@@ -59,8 +59,8 @@ func (app *Config) authorizeValve(w http.ResponseWriter, r *http.Request, serial
 		app.ErrorLog.Println("valve: control device lookup failed:", err)
 		return 0, false
 	}
-	if cd == nil || cd.Kind != data.ControlKindValve {
-		app.errorJSON(w, errors.New("this device is not a valve control device"), http.StatusNotFound)
+	if cd == nil {
+		app.errorJSON(w, errors.New("this device is not a control device"), http.StatusNotFound)
 		return 0, false
 	}
 
@@ -146,7 +146,7 @@ func (app *Config) SaveValveConfig(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusOK, cfg)
 }
 
-// setUpValveConfig gives a newly registered valve a safe default (follow an empty
+// setUpValveConfig gives a newly registered control device a safe default (follow an empty
 // schedule, i.e. stay closed) and sends it to the device.
 func (app *Config) setUpValveConfig(serialNumber string, userID uint) {
 	cfg, err := app.Models.ValveConfig.Get(serialNumber)
@@ -166,7 +166,7 @@ func (app *Config) setUpValveConfig(serialNumber string, userID uint) {
 	}
 }
 
-// retireValveConfig is used when a device stops being a valve control device: it
+// retireValveConfig is used when a device stops being a control device: it
 // tells the device to stop following any schedule, then forgets the config.
 func (app *Config) retireValveConfig(serialNumber string) {
 	cfg, err := app.Models.ValveConfig.Get(serialNumber)
@@ -185,7 +185,7 @@ func (app *Config) retireValveConfig(serialNumber string) {
 	}
 }
 
-// republishValveConfigs sends every valve's config to the broker again. Run at start-up,
+// republishValveConfigs sends every control device's config to the broker again. Run at start-up,
 // so a broker that lost its retained messages does not leave devices without a schedule.
 func (app *Config) republishValveConfigs() {
 	controls, err := app.Models.ControlDevice.GetAll()
@@ -195,9 +195,6 @@ func (app *Config) republishValveConfigs() {
 	}
 	sent := 0
 	for _, cd := range controls {
-		if cd.Kind != data.ControlKindValve {
-			continue
-		}
 		cfg, err := app.Models.ValveConfig.Get(cd.SerialNumber)
 		if err != nil || cfg == nil {
 			continue
