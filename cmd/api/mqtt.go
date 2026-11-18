@@ -157,7 +157,9 @@ func (m *MQTTClient) cleanupStaleBuffers() {
 func (m *MQTTClient) processDeviceData(logEntry *data.DeviceData) error {
 	// Check if the device exists
 	device, err := m.app.Models.Device.GetBySerialNumber(logEntry.SerialNumber)
-	if err != nil {
+	// GetBySerialNumber returns (nil, nil) for an unknown serial number, so a nil device
+	// must also trigger the auto-registration (otherwise device.ID below dereferences nil)
+	if err != nil || device == nil {
 		// Get system user for auto-registration
 		systemUser, err := m.app.Models.User.GetByEmail("system@fieldeyes.internal")
 		if err != nil || systemUser == nil {
